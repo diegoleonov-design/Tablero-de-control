@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: dashboard-altromondo
+    env: static
+    buildCommand: ""
+    staticPublishPath: .
