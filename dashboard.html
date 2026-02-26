@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Proyectos</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .file-upload {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            background: #f8f9ff;
+            border-color: #764ba2;
+        }
+
+        .upload-area.dragover {
+            background: #f0f4ff;
+            border-color: #764ba2;
+            transform: scale(1.02);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .upload-text {
+            font-size: 1.2em;
+            color: #666;
+        }
+
+        .kpis {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .kpi-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+
+        .kpi-value {
+            font-size: 3em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+
+        .kpi-label {
+            color: #666;
+            font-size: 1.1em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .kpi-icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .chart-container.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .chart-title {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        canvas {
+            max-height: 400px;
+        }
+
+        footer {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            color: #666;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+            font-size: 1.5em;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .kpi-value {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Dashboard de Proyectos</h1>
+            <p class="subtitle">Análisis de tareas y proyectos - Jira</p>
+        </header>
+
+        <div class="file-upload" id="uploadSection">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">
+                    <strong>Arrastra tu archivo CSV aquí</strong><br>
+                    o haz click para seleccionar
+                </div>
+                <input type="file" id="fileInput" accept=".csv">
+            </div>
+        </div>
+
+        <div id="loading" class="loading hidden">⏳ Procesando datos...</div>
+
+        <div id="dashboard" class="hidden">
+            <div class="kpis" id="kpis"></div>
+
+            <div class="charts-grid">
+                <div class="chart-container">
+                    <h3 class="chart-title">Tareas por Proyecto</h3>
+                    <canvas id="proyectosChart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h3 class="chart-title">Tareas por Estado</h3>
+                    <canvas id="estadosChart"></canvas>
+                </div>
+
+                <div class="chart-container full-width">
+                    <h3 class="chart-title">Tareas por Persona</h3>
+                    <canvas id="personasChart"></canvas>
+                </div>
+            </div>
+
+            <footer>
+                <p>Generado automáticamente desde Jira • Última actualización: <span id="fecha"></span></p>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadSection = document.getElementById('uploadSection');
+        const loading = document.getElementById('loading');
+        const dashboard = document.getElementById('dashboard');
+
+        // Click para seleccionar archivo
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.csv')) {
+                processFile(file);
+            } else {
+                alert('Por favor, selecciona un archivo CSV');
+            }
+        });
+
+        // Selección de archivo
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                processFile(file);
+            }
+        });
+
+        function processFile(file) {
+            uploadSection.classList.add('hidden');
+            loading.classList.remove('hidden');
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    const data = processJiraData(results.data);
+                    renderDashboard(data);
+                    loading.classList.add('hidden');
+                    dashboard.classList.remove('hidden');
+                },
+                error: function(error) {
+                    alert('Error al procesar el archivo: ' + error.message);
+                    loading.classList.add('hidden');
+                    uploadSection.classList.remove('hidden');
+                }
+            });
+        }
+
+        function parseTimeToHours(timeStr) {
+            if (!timeStr || timeStr.trim() === '') return 0;
+
+            let hours = 0;
+            const daysMatch = timeStr.match(/(\d+)d/);
+            const hoursMatch = timeStr.match(/(\d+)h/);
+            const minutesMatch = timeStr.match(/(\d+)m/);
+
+            if (daysMatch) hours += parseInt(daysMatch[1]) * 8;
+            if (hoursMatch) hours += parseInt(hoursMatch[1]);
+            if (minutesMatch) hours += parseInt(minutesMatch[1]) / 60;
+
+            return Math.round(hours * 100) / 100;
+        }
+
+        function processJiraData(rows) {
+            const horasPorProyecto = {};
+            const tareasPorProyecto = {};
+            const tareasPorPersona = {};
+            const tareasPorEstado = {};
+            const proyectos = new Set();
+            const personas = new Set();
+
+            let totalHoras = 0;
+            let totalTareas = 0;
+
+            rows.forEach(row => {
+                const proyecto = row['Nombre del proyecto'] || 'Sin proyecto';
+                const persona = row['Persona asignada'] || 'Sin asignar';
+                const estado = row['Estado'] || 'Sin estado';
+                const tiempoTrabajado = row['Tiempo Trabajado'] || '';
+
+                const horas = parseTimeToHours(tiempoTrabajado);
+
+                if (proyecto && proyecto.trim()) {
+                    horasPorProyecto[proyecto] = (horasPorProyecto[proyecto] || 0) + horas;
+                    tareasPorProyecto[proyecto] = (tareasPorProyecto[proyecto] || 0) + 1;
+                    proyectos.add(proyecto);
+                }
+
+                if (persona && persona.trim()) {
+                    tareasPorPersona[persona] = (tareasPorPersona[persona] || 0) + 1;
+                    personas.add(persona);
+                }
+
+                if (estado && estado.trim()) {
+                    tareasPorEstado[estado] = (tareasPorEstado[estado] || 0) + 1;
+                }
+
+                totalHoras += horas;
+                totalTareas += 1;
+            });
+
+            return {
+                kpis: {
+                    total_horas: Math.round(totalHoras * 100) / 100,
+                    total_tareas: totalTareas,
+                    total_proyectos: proyectos.size,
+                    total_personas: personas.size
+                },
+                horas_por_proyecto: horasPorProyecto,
+                tareas_por_proyecto: tareasPorProyecto,
+                tareas_por_persona: tareasPorPersona,
+                tareas_por_estado: tareasPorEstado
+            };
+        }
+
+        function renderDashboard(data) {
+            renderKPIs(data.kpis);
+            renderProyectosChart(data.tareas_por_proyecto);
+            renderEstadosChart(data.tareas_por_estado);
+            renderPersonasChart(data.tareas_por_persona);
+
+            document.getElementById('fecha').textContent = new Date().toLocaleDateString('es-ES', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        function renderKPIs(kpis) {
+            const kpisContainer = document.getElementById('kpis');
+
+            const kpiData = [
+                { icon: '📋', label: 'Total Tareas', value: kpis.total_tareas },
+                { icon: '📁', label: 'Total Proyectos', value: kpis.total_proyectos },
+                { icon: '👥', label: 'Total Personas', value: kpis.total_personas },
+                { icon: '⏱️', label: 'Horas Trabajadas', value: kpis.total_horas || 'N/A' }
+            ];
+
+            kpisContainer.innerHTML = kpiData.map(kpi => `
+                <div class="kpi-card">
+                    <div class="kpi-icon">${kpi.icon}</div>
+                    <div class="kpi-value">${kpi.value}</div>
+                    <div class="kpi-label">${kpi.label}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderProyectosChart(tareasPorProyecto) {
+            const proyectos = Object.entries(tareasPorProyecto)
+                .filter(([proyecto, _]) => proyecto.trim() && !proyecto.includes('attrs'))
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 10);
+
+            const ctx = document.getElementById('proyectosChart').getContext('2d');
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: proyectos.map(([proyecto, _]) => proyecto),
+                    datasets: [{
+                        label: 'Cantidad de Tareas',
+                        data: proyectos.map(([_, count]) => count),
+                        backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 10 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderEstadosChart(tareasPorEstado) {
+            const estados = Object.entries(tareasPorEstado)
+                .filter(([estado, _]) => !estado.includes('content:') && !estado.includes('background:'))
+                .sort(([, a], [, b]) => b - a);
+
+            const ctx = document.getElementById('estadosChart').getContext('2d');
+
+            const colors = [
+                '#667eea', '#764ba2', '#f093fb', '#4facfe',
+                '#43e97b', '#fa709a', '#fee140', '#30cfd0',
+                '#a8edea', '#fed6e3', '#c471ed', '#12c2e9'
+            ];
+
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: estados.map(([estado, _]) => estado),
+                    datasets: [{
+                        data: estados.map(([_, count]) => count),
+                        backgroundColor: colors,
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                font: { size: 11 }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderPersonasChart(tareasPorPersona) {
+            const personas = Object.entries(tareasPorPersona)
+                .filter(([persona, _]) => !persona.includes('background:'))
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 15);
+
+            const ctx = document.getElementById('personasChart').getContext('2d');
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: personas.map(([persona, _]) => persona),
+                    datasets: [{
+                        label: 'Cantidad de Tareas',
+                        data: personas.map(([_, count]) => count),
+                        backgroundColor: 'rgba(118, 75, 162, 0.8)',
+                        borderColor: 'rgba(118, 75, 162, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 5 }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node process_data.js:*)",
+      "Bash(python3 -c \":*)"
+    ]
+  }
+}

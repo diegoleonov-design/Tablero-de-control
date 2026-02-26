@@ -1,0 +1,9 @@
+{
+  "jira_domain":        "tu-empresa.atlassian.net",
+  "jira_email":         "tu-email@empresa.com",
+  "jira_token":         "tu-api-token-de-atlassian",
+  "jira_jql":           "",
+  "clockify_key":       "tu-api-key-de-clockify",
+  "clockify_workspace": "",
+  "clockify_date_from": "2026-01-01T00:00:00.000Z"
+}

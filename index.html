@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard de Proyectos – Altromondo</title>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #f1f5f9;
+  --surface: #ffffff;
+  --border:  #e2e8f0;
+  --text:    #1e293b;
+  --muted:   #64748b;
+  --green:   #22c55e;  --green-bg:  #dcfce7;  --green-text:  #166534;
+  --yellow:  #f59e0b;  --yellow-bg: #fef3c7;  --yellow-text: #92400e;
+  --red:     #ef4444;  --red-bg:    #fee2e2;  --red-text:    #991b1b;
+  --gray:    #94a3b8;  --gray-bg:   #f1f5f9;  --gray-text:   #64748b;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── UPLOAD SCREEN ────────────────────────────────────────────────── */
+#upload-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: linear-gradient(135deg, #5c6bc0 0%, #00bcd4 100%);
+}
+
+.upload-card {
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  width: 100%;
+  max-width: 680px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.2);
+}
+
+.upload-logo {
+  text-align: center;
+  margin-bottom: 8px;
+}
+.upload-logo img { max-width: 220px; height: auto; }
+
+.upload-title {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0d1b5e;
+  margin-bottom: 4px;
+}
+.upload-sub {
+  text-align: center;
+  color: var(--muted);
+  font-size: .88rem;
+  margin-bottom: 32px;
+}
+
+.upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.drop-zone {
+  border: 2.5px dashed #5c6bc0;
+  border-radius: 12px;
+  padding: 28px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+}
+.drop-zone:hover, .drop-zone.dragover { background: #f0f4ff; border-color: #00bcd4; transform: scale(1.01); }
+.drop-zone.done { border-color: #22c55e; background: #f0fff4; }
+.drop-zone input { display: none; }
+.drop-icon { font-size: 2.2rem; margin-bottom: 8px; }
+.drop-label { font-size: .85rem; color: var(--muted); line-height: 1.4; }
+.drop-label strong { display: block; color: var(--text); margin-bottom: 2px; }
+.drop-file  { margin-top: 8px; font-size: .78rem; color: #22c55e; font-weight: 700; }
+
+.btn-generate {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #5c6bc0, #00bcd4);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .2s;
+}
+.btn-generate:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.15); }
+.btn-generate:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+.upload-hint {
+  text-align: center;
+  margin-top: 14px;
+  font-size: .75rem;
+  color: var(--muted);
+}
+
+/* ── LOADING ─────────────────────────────────────────────────────── */
+#loading-screen {
+  display: none;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  background: linear-gradient(135deg, #5c6bc0 0%, #00bcd4 100%);
+  color: white;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+.spinner {
+  width: 48px; height: 48px;
+  border: 5px solid rgba(255,255,255,.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── DASHBOARD ───────────────────────────────────────────────────── */
+#dashboard-screen { display: none; }
+
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.header-logo {
+  height: 36px;
+}
+.header-logo img { height: 36px; width: auto; }
+.header-title { font-size: 1.1rem; font-weight: 700; }
+.header-sub   { color: var(--muted); font-size: .75rem; margin-top: 1px; }
+.header-actions { margin-left: auto; display: flex; gap: 8px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 13px; border-radius: 7px; border: 1px solid transparent;
+  font-size: .8rem; font-weight: 600; cursor: pointer;
+}
+.btn-ghost { background: none; color: var(--muted); border-color: var(--border); }
+.btn-ghost:hover { background: var(--bg); color: var(--text); }
+
+/* ── TABS ─────────────────────────────────────────────────────────── */
+.tabs-bar {
+  background: var(--surface);
+  border-bottom: 2px solid var(--border);
+  padding: 0 28px;
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+}
+.tab {
+  padding: 12px 20px;
+  border: none; background: none; cursor: pointer;
+  font-size: .85rem; font-weight: 600; color: var(--muted);
+  border-bottom: 3px solid transparent; margin-bottom: -2px;
+  white-space: nowrap; transition: color .15s, border-color .15s;
+  display: flex; align-items: center; gap: 6px;
+}
+.tab:hover { color: var(--text); }
+.tab.active { border-bottom-color: var(--tab-color,#6366f1); color: var(--tab-color,#6366f1); }
+.tab-badge {
+  font-size: .68rem; background: var(--bg); color: var(--muted);
+  padding: 1px 6px; border-radius: 999px; font-weight: 500;
+}
+
+/* ── MAIN ─────────────────────────────────────────────────────────── */
+.main { padding: 24px 28px; max-width: 1600px; margin: 0 auto; }
+.client-view { display: none; }
+.client-view.active { display: block; }
+
+/* ── KPI ─────────────────────────────────────────────────────────── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px; margin-bottom: 22px;
+}
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 18px; position: relative; overflow: hidden;
+}
+.kpi-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--kc, #6366f1);
+}
+.kpi-label { font-size: .68rem; font-weight: 700; text-transform: uppercase;
+             letter-spacing: .06em; color: var(--muted); margin-bottom: 5px; }
+.kpi-value { font-size: 1.65rem; font-weight: 800; }
+.kpi-unit  { font-size: .75rem; color: var(--muted); margin-top: 1px; }
+
+/* ── PROJECT CARD ────────────────────────────────────────────────── */
+.project-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; margin-bottom: 14px; overflow: hidden;
+}
+.project-header {
+  padding: 13px 18px; display: flex; align-items: center; gap: 10px;
+  cursor: pointer; user-select: none; background: #fafafa;
+  border-bottom: 1px solid var(--border);
+}
+.project-header:hover { background: #f4f6f9; }
+.proj-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.proj-name { font-weight: 700; font-size: .95rem; flex: 1; }
+.proj-meta { display: flex; gap: 14px; font-size: .74rem; color: var(--muted); }
+.proj-meta strong { color: var(--text); }
+.proj-toggle { font-size: .85rem; color: var(--muted); transition: transform .2s; flex-shrink: 0; }
+.project-header.open .proj-toggle { transform: rotate(180deg); }
+
+/* ── TABLE ───────────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .79rem; }
+thead th {
+  padding: 9px 13px; text-align: left;
+  font-size: .66rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--muted);
+  background: #f8fafc; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+tbody tr { border-bottom: 1px solid var(--border); }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: #f8fafc; }
+td { padding: 9px 13px; vertical-align: middle; }
+
+.task-name { font-weight: 500; }
+.task-id   { font-size: .67rem; color: var(--muted); font-weight: 600; }
+.task-estado {
+  display: inline-block; font-size: .61rem; font-weight: 600;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 999px;
+  background: var(--gray-bg); color: var(--muted); margin-top: 3px;
+}
+.task-estado.done { background: var(--green-bg); color: var(--green-text); }
+
+.persona-badge { display: inline-flex; align-items: center; gap: 6px; }
+.persona-av {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: linear-gradient(135deg,#6366f1,#8b5cf6);
+  color: #fff; font-size: .6rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+
+/* Semaphore */
+.sem { display: inline-flex; align-items: center; justify-content: center;
+       width: 26px; height: 26px; border-radius: 50%; font-size: .72rem; font-weight: 700; }
+.sem-verde    { background: var(--green-bg);  color: var(--green-text);  }
+.sem-amarillo { background: var(--yellow-bg); color: var(--yellow-text); }
+.sem-rojo     { background: var(--red-bg);    color: var(--red-text);    }
+.sem-gris     { background: var(--gray-bg);   color: var(--gray-text);   }
+
+.hrs-badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 9px; border-radius: 6px; font-weight: 700; font-size: .75rem;
+}
+.hrs-verde    { background: var(--green-bg);  color: var(--green-text);  }
+.hrs-amarillo { background: var(--yellow-bg); color: var(--yellow-text); }
+.hrs-rojo     { background: var(--red-bg);    color: var(--red-text);    }
+.hrs-gris     { background: var(--gray-bg);   color: var(--gray-text); font-weight: 400; }
+
+.date-val { font-size: .78rem; white-space: nowrap; }
+.desvio-chip {
+  display: inline-block; font-size: .65rem; font-weight: 700;
+  padding: 2px 6px; border-radius: 999px; margin-top: 2px;
+}
+.dc-verde    { background: var(--green-bg);  color: var(--green-text); }
+.dc-rojo     { background: var(--red-bg);    color: var(--red-text);   }
+
+/* ── Clockify bar ────────────────────────────────────────────────── */
+.cw-bar {
+  padding: 9px 18px; background: #fffbf0;
+  border-bottom: 1px solid #fde68a;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .76rem;
+}
+.cw-label { font-weight: 700; color: #92400e; }
+.cw-person {
+  display: flex; align-items: center; gap: 5px;
+  background: white; border: 1px solid #fcd34d;
+  border-radius: 999px; padding: 2px 10px;
+  color: #78350f; font-weight: 500;
+}
+.cw-person span { color: #d97706; font-weight: 700; }
+
+/* ── Legend ──────────────────────────────────────────────────────── */
+.legend {
+  display: flex; gap: 14px; align-items: center;
+  margin-bottom: 18px; flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: .73rem; color: var(--muted); }
+.legend-dot  { width: 9px; height: 9px; border-radius: 50%; }
+
+/* ── Empty ───────────────────────────────────────────────────────── */
+.empty-td { text-align: center; padding: 24px; color: var(--muted); }
+.client-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+}
+.client-name  { font-size: 1.25rem; font-weight: 800; }
+.client-color-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── FILTER BAR ──────────────────────────────────────────────────── */
+#filter-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 28px;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+#filter-bar.visible { display: flex; }
+
+.fb-search {
+  position: relative; flex: 1; min-width: 180px; max-width: 280px;
+}
+.fb-search input {
+  width: 100%; padding: 7px 12px 7px 32px;
+  border: 1px solid var(--border); border-radius: 7px;
+  font-size: .82rem; font-family: inherit; background: var(--bg);
+  outline: none; transition: border-color .15s;
+}
+.fb-search input:focus { border-color: #6366f1; background: white; }
+.fb-search::before {
+  content: '🔍'; position: absolute; left: 9px; top: 50%;
+  transform: translateY(-50%); font-size: .78rem; pointer-events: none;
+}
+
+.fb-select {
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px;
+  font-size: .8rem; font-family: inherit; background: var(--bg);
+  color: var(--text); outline: none; cursor: pointer;
+}
+.fb-select:focus { border-color: #6366f1; }
+
+.fb-group { display: flex; align-items: center; gap: 4px; }
+.fb-label { font-size: .73rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+
+.f-chip {
+  padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg); cursor: pointer; font-size: .78rem; font-weight: 600;
+  color: var(--muted); transition: all .15s;
+}
+.f-chip:hover { border-color: #6366f1; color: #6366f1; }
+.f-chip.active { background: #6366f1; color: white; border-color: #6366f1; }
+.f-chip.act-verde    { background: var(--green-bg);  color: var(--green-text);  border-color: var(--green); }
+.f-chip.act-amarillo { background: var(--yellow-bg); color: var(--yellow-text); border-color: var(--yellow); }
+.f-chip.act-rojo     { background: var(--red-bg);    color: var(--red-text);    border-color: var(--red); }
+
+.fb-clear {
+  padding: 6px 12px; border-radius: 7px; border: 1px solid var(--border);
+  background: none; cursor: pointer; font-size: .78rem; color: var(--muted);
+}
+.fb-clear:hover { background: var(--red-bg); color: var(--red-text); border-color: var(--red); }
+.fb-count { font-size: .76rem; color: var(--muted); white-space: nowrap; margin-left: auto; }
+
+/* ── SORTABLE HEADERS ────────────────────────────────────────────── */
+th.sortable {
+  cursor: pointer; user-select: none; position: relative;
+}
+th.sortable:hover { background: #edf0f7; color: var(--text); }
+th.sortable::after {
+  content: ' ⇅'; opacity: .3; font-size: .65rem;
+}
+th.sortable.sort-asc::after  { content: ' ▲'; opacity: 1; color: #6366f1; }
+th.sortable.sort-desc::after { content: ' ▼'; opacity: 1; color: #6366f1; }
+
+@media (max-width: 680px) {
+  .upload-grid { grid-template-columns: 1fr; }
+  .main        { padding: 14px; }
+  #filter-bar  { padding: 8px 14px; }
+}
+
+/* ── MODE TABS & API FORM ────────────────────────────────────── */
+.mode-tabs {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.mode-tab {
+  flex: 1; padding: 9px; border: none;
+  background: #f8fafc; font-size: .84rem; font-weight: 600;
+  cursor: pointer; color: var(--muted); transition: all .15s;
+}
+.mode-tab.active { background: #0d1b5e; color: white; }
+
+.api-fields {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; margin-bottom: 16px;
+}
+.api-group { display: flex; flex-direction: column; gap: 4px; }
+.api-group-full { grid-column: 1 / -1; }
+.api-group label { font-size: .72rem; font-weight: 700; color: var(--muted); }
+.api-group input {
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px;
+  font-size: .82rem; font-family: inherit; outline: none; transition: border-color .15s;
+}
+.api-group input:focus { border-color: #5c6bc0; }
+.api-status { font-size: .76rem; text-align: center; margin-top: 10px; min-height: 1.2em; }
+.api-hint code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: .82em; }
+
+/* ── CHARTS ──────────────────────────────────────────────────── */
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 195px 195px;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.chart-title {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.chart-wrap { position: relative; }
+@media (max-width: 900px) {
+  .charts-row { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+     UPLOAD SCREEN
+════════════════════════════════════════════════════════════════ -->
+<div id="upload-screen">
+  <div class="upload-card">
+    <div class="upload-logo">
+      <img src="Logo Altro (1).jpg" alt="Altromondo" onerror="this.style.display='none'">
+    </div>
+    <div class="upload-title">Dashboard de Proyectos</div>
+    <div class="upload-sub">Cargá tus exports de Jira y/o Clockify para generar el dashboard por cliente</div>
+
+    <!-- Selector de modo -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="mt-csv" onclick="setMode('csv')">📁 Cargar CSV</button>
+      <button class="mode-tab"        id="mt-api" onclick="setMode('api')">🔌 Modo API (tiempo real)</button>
+    </div>
+
+    <!-- CSV mode -->
+    <div id="csv-mode-form">
+      <div class="upload-grid">
+        <div class="drop-zone" id="dz-jira">
+          <div class="drop-icon">📋</div>
+          <div class="drop-label">
+            <strong>Archivo Jira</strong>
+            Arrastrá o hacé click<br>(CSV)
+          </div>
+          <div class="drop-file" id="jira-name"></div>
+          <input type="file" id="fi-jira" accept=".csv">
+        </div>
+
+        <div class="drop-zone" id="dz-cw">
+          <div class="drop-icon">⏱️</div>
+          <div class="drop-label">
+            <strong>Archivo Clockify</strong>
+            Arrastrá o hacé click<br>(CSV)
+          </div>
+          <div class="drop-file" id="cw-name"></div>
+          <input type="file" id="fi-cw" accept=".csv">
+        </div>
+      </div>
+      <button class="btn-generate" id="btn-gen" disabled onclick="generate()">
+        🚀 Generar Dashboard
+      </button>
+      <div class="upload-hint">Podés cargar uno o los dos archivos</div>
+    </div>
+
+    <!-- API mode -->
+    <div id="api-mode-form" style="display:none">
+      <div class="api-fields">
+        <div class="api-group">
+          <label>Dominio Jira</label>
+          <input id="api-jira-domain" placeholder="empresa.atlassian.net">
+        </div>
+        <div class="api-group">
+          <label>Email Jira</label>
+          <input id="api-jira-email" type="email" placeholder="usuario@empresa.com">
+        </div>
+        <div class="api-group">
+          <label>API Token Jira</label>
+          <input id="api-jira-token" type="password" placeholder="Token de atlassian.com/account">
+        </div>
+        <div class="api-group">
+          <label>API Key Clockify</label>
+          <input id="api-cw-key" type="password" placeholder="Clockify › Perfil › API Key">
+        </div>
+        <div class="api-group">
+          <label>Clockify: datos desde</label>
+          <input id="api-date-from" type="date">
+        </div>
+        <div class="api-group">
+          <label>JQL personalizado (opcional)</label>
+          <input id="api-jira-jql" placeholder="Dejar vacío para usar el default">
+        </div>
+      </div>
+      <button class="btn-generate" onclick="loadFromAPI()">
+        🔌 Conectar y cargar datos
+      </button>
+      <div id="api-status" class="api-status"></div>
+      <div class="upload-hint api-hint">
+        Requiere correr <code>python servidor.py</code> en esta carpeta primero
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     LOADING
+════════════════════════════════════════════════════════════════ -->
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div>Procesando datos…</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     DASHBOARD
+════════════════════════════════════════════════════════════════ -->
+<div id="dashboard-screen">
+  <header class="header">
+    <div class="header-logo">
+      <img src="Logo Altro (1).jpg" alt="Altromondo" onerror="this.style.display='none'">
+    </div>
+    <div>
+      <div class="header-title">Dashboard de Proyectos</div>
+      <div class="header-sub" id="header-sub">Jira + Clockify</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-ghost" id="btn-refresh" style="display:none" onclick="refreshFromAPI()">🔄 Actualizar</button>
+      <button class="btn btn-ghost" onclick="resetApp()">↩ Cargar nuevos archivos</button>
+    </div>
+  </header>
+
+  <nav class="tabs-bar" id="tabs-bar"></nav>
+
+  <!-- ── Filter bar ── -->
+  <div id="filter-bar">
+    <div class="fb-search">
+      <input type="text" id="f-search" placeholder="Buscar tarea o ID…" oninput="onFilterChange()">
+    </div>
+
+    <select class="fb-select" id="f-persona" onchange="onFilterChange()">
+      <option value="">Persona (todas)</option>
+    </select>
+
+    <select class="fb-select" id="f-estado" onchange="onFilterChange()">
+      <option value="">Estado (todos)</option>
+    </select>
+
+    <div class="fb-group">
+      <span class="fb-label">Fecha:</span>
+      <button class="f-chip active" id="fc-fecha-"        onclick="setChip('semFecha','',this)">Todos</button>
+      <button class="f-chip"        id="fc-fecha-verde"   onclick="setChip('semFecha','verde',this)">🟢</button>
+      <button class="f-chip"        id="fc-fecha-amarillo"onclick="setChip('semFecha','amarillo',this)">🟡</button>
+      <button class="f-chip"        id="fc-fecha-rojo"    onclick="setChip('semFecha','rojo',this)">🔴</button>
+    </div>
+
+    <div class="fb-group">
+      <span class="fb-label">Horas:</span>
+      <button class="f-chip active" id="fc-horas-"        onclick="setChip('semHoras','',this)">Todos</button>
+      <button class="f-chip"        id="fc-horas-verde"   onclick="setChip('semHoras','verde',this)">🟢</button>
+      <button class="f-chip"        id="fc-horas-amarillo"onclick="setChip('semHoras','amarillo',this)">🟡</button>
+      <button class="f-chip"        id="fc-horas-rojo"    onclick="setChip('semHoras','rojo',this)">🔴</button>
+    </div>
+
+    <button class="fb-clear" onclick="clearFilters()">✕ Limpiar</button>
+    <span id="f-count" class="fb-count"></span>
+  </div>
+
+  <main class="main" id="main"></main>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// MAPPINGS
+// ════════════════════════════════════════════════════════════════
+const CLIENT_JIRA_MAP = {
+  "Transener":    ["TRANSENER TESLA","TRANSENER Costeo Emplazamiento","TRANSENER Mantenimiento"],
+  "SACDE":        ["SACDE - Francos","SACDE - Equipos","SACDE - Partes Diarios","SACDE APP MATERIALES","SACDE Mantenimiento","SACDE PORTAL"],
+  "Bayer":        ["Bayer"],
+  "Pampa Energia":["PAMPA Almacenes Mejoras"],
+};
+
+// Invert: jira project → client
+const JIRA_TO_CLIENT = {};
+for (const [cl, projs] of Object.entries(CLIENT_JIRA_MAP))
+  for (const p of projs) JIRA_TO_CLIENT[p] = cl;
+
+// Clockify project → jira project
+const CW_TO_JIRA = {
+  "Tesla":                              "TRANSENER TESLA",
+  "Costeo de Emplazamiento":            "TRANSENER Costeo Emplazamiento",
+  "Migración S4":                       "TRANSENER Mantenimiento",
+  "Interface de Francos Compensatorios":"TRANSENER Mantenimiento",
+  "Trello":                             "TRANSENER Mantenimiento",
+  "Premios":                            "TRANSENER Mantenimiento",
+  "Paquete 4 ''Francos APK''":          "SACDE - Francos",
+  "Portal de Proveedores FASE 1":       "SACDE PORTAL",
+  "Portal de Proveedores FASE 2":       "SACDE PORTAL",
+  "Auditoria Seguridad":                "SACDE Mantenimiento",
+  "Soporte":                            "SACDE Mantenimiento",
+  "Consultoria FICO":                   "SACDE Mantenimiento",
+  "App Facilites":                      "Bayer",
+  "Mejoras Solped":                     "Bayer",
+  "Mejoras App Almacenes- Fase 2":      "PAMPA Almacenes Mejoras",
+};
+
+const CLIENT_COLORS = {
+  "Transener":    "#6366f1",
+  "SACDE":        "#f59e0b",
+  "Bayer":        "#3b82f6",
+  "Pampa Energia":"#10b981",
+};
+
+const ESTADOS_DONE = new Set([
+  'finalizada','cerrado','resuelto','done','closed','resolved',
+  'completado','completada','terminado','terminada','entrega'
+]);
+
+// ════════════════════════════════════════════════════════════════
+// FILE UPLOAD SETUP
+// ════════════════════════════════════════════════════════════════
+let jiraFile = null, cwFile = null;
+
+function setupDrop(dzId, inputId, type) {
+  const dz = document.getElementById(dzId);
+  const fi = document.getElementById(inputId);
+
+  dz.addEventListener('click', () => fi.click());
+
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    handleFile(e.dataTransfer.files[0], type, dz);
+  });
+  fi.addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0], type, dz);
+  });
+}
+
+function handleFile(file, type, dz) {
+  if (!file.name.endsWith('.csv')) { alert('Usá archivos CSV'); return; }
+  if (type === 'jira') {
+    jiraFile = file;
+    document.getElementById('jira-name').textContent = '✓ ' + file.name;
+  } else {
+    cwFile = file;
+    document.getElementById('cw-name').textContent = '✓ ' + file.name;
+  }
+  dz.classList.add('done');
+  document.getElementById('btn-gen').disabled = !(jiraFile || cwFile);
+}
+
+setupDrop('dz-jira', 'fi-jira', 'jira');
+setupDrop('dz-cw',   'fi-cw',   'cw');
+
+// ════════════════════════════════════════════════════════════════
+// PARSE HELPERS
+// ════════════════════════════════════════════════════════════════
+function parseCSV(file) {
+  return new Promise((res, rej) => {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: r => res(r.data),
+      error: rej,
+    });
+  });
+}
+
+// Jira CSV has BOM on first header — normalize keys
+function normalizeRow(row) {
+  const out = {};
+  for (const [k, v] of Object.entries(row))
+    out[k.replace(/^\uFEFF/, '').trim()] = v;
+  return out;
+}
+
+const MESES = {ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,oct:10,nov:11,dic:12};
+
+function parseJiraDate(s) {
+  if (!s || !s.trim()) return null;
+  try {
+    const parts = s.trim().split(' ')[0].split('/');
+    const [d, m, y] = parts;
+    const month = MESES[m.toLowerCase()] || parseInt(m);
+    const year  = parseInt(y) < 100 ? 2000 + parseInt(y) : parseInt(y);
+    const dt = new Date(year, month - 1, parseInt(d));
+    return isNaN(dt) ? null : dt;
+  } catch { return null; }
+}
+
+function secsToHours(s) {
+  if (!s || !s.trim()) return null;
+  const n = parseInt(s);
+  return isNaN(n) ? null : Math.round(n / 3600 * 100) / 100;
+}
+
+function fmtDate(dt) {
+  if (!dt) return '—';
+  const d = String(dt.getDate()).padStart(2,'0');
+  const m = String(dt.getMonth()+1).padStart(2,'0');
+  const y = String(dt.getFullYear()).slice(2);
+  return `${d}/${m}/${y}`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// SEMÁFOROS
+// ════════════════════════════════════════════════════════════════
+const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+
+function daysDiff(a, b) { // b - a in days
+  if (!a || !b) return null;
+  return Math.round((b - a) / 86400000);
+}
+
+function calcSemFecha(t) {
+  const done = ESTADOS_DONE.has((t.estado || '').toLowerCase());
+  if (!t.fecha_fin) return 'gris';
+  if (done) {
+    if (!t.fecha_fin_real) return 'verde';
+    const d = daysDiff(t.fecha_fin, t.fecha_fin_real);
+    return d <= 0 ? 'verde' : 'rojo';
+  } else {
+    const rest = daysDiff(TODAY, t.fecha_fin);
+    if (rest < 0)  return 'rojo';
+    if (rest <= 7) return 'amarillo';
+    return 'verde';
+  }
+}
+
+function calcSemHoras(t) {
+  const done = ESTADOS_DONE.has((t.estado || '').toLowerCase());
+  const est  = t.horas_estimadas;
+  const cons = t.horas_consumidas;
+  if (est == null || cons == null) return 'gris';
+  if (cons > est) return 'rojo';
+  if (!done && est > 0 && cons / est >= 0.8) return 'amarillo';
+  return 'verde';
+}
+
+// ════════════════════════════════════════════════════════════════
+// PROCESS JIRA
+// ════════════════════════════════════════════════════════════════
+function processJira(rows) {
+  const byClient = {};
+
+  for (const raw of rows) {
+    const r = normalizeRow(raw);
+    const proyecto  = (r['Nombre del proyecto'] || '').trim();
+    const client    = JIRA_TO_CLIENT[proyecto];
+    if (!client) continue;
+
+    const fechaFin     = parseJiraDate(r['Fecha de vencimiento']);
+    const fechaFinReal = parseJiraDate(r['Resuelta']);
+    const estSec       = secsToHours(r['Estimación original']);
+    const restSec      = secsToHours(r['Trabajo restante estimado']);
+    const trabSec      = secsToHours(r['Tiempo Trabajado']);
+
+    // Effective consumed hours
+    let cons = trabSec;
+    if (cons == null && estSec != null && restSec != null) cons = Math.round((estSec - restSec) * 100) / 100;
+
+    const task = {
+      id:               (r['Clave de incidencia'] || '').trim(),
+      resumen:          (r['Resumen'] || '').trim(),
+      estado:           (r['Estado'] || '').trim(),
+      persona:          (r['Persona asignada'] || 'Sin asignar').trim(),
+      horas_estimadas:  estSec,
+      horas_consumidas: cons,
+      horas_pendientes: restSec,
+      fecha_fin:        fechaFin,
+      fecha_fin_real:   fechaFinReal,
+      desvio_dias:      daysDiff(fechaFin, fechaFinReal),
+    };
+
+    task.sem_fecha = calcSemFecha(task);
+    task.sem_horas = calcSemHoras(task);
+
+    byClient[client] = byClient[client] || {};
+    byClient[client][proyecto] = byClient[client][proyecto] || [];
+    byClient[client][proyecto].push(task);
+  }
+  return byClient;
+}
+
+// ════════════════════════════════════════════════════════════════
+// PROCESS CLOCKIFY
+// ════════════════════════════════════════════════════════════════
+function processClockify(rows) {
+  const byJiraProj = {};
+  const byClient   = {};
+
+  for (const raw of rows) {
+    const r = normalizeRow(raw);
+    const cwProj  = (r['Project'] || '').trim();
+    const cwClient = (r['Client'] || '').trim();
+    const user    = (r['User'] || '').trim();
+    const dur     = parseFloat(r['Duration (decimal)']) || 0;
+
+    const jiraProj  = CW_TO_JIRA[cwProj];
+    const jiraClient = JIRA_TO_CLIENT[jiraProj] || cwClient;
+
+    if (jiraProj) {
+      const d = byJiraProj[jiraProj] = byJiraProj[jiraProj] || { total: 0, users: {} };
+      d.total += dur;
+      d.users[user] = (d.users[user] || 0) + dur;
+    }
+
+    if (jiraClient) {
+      const c = byClient[jiraClient] = byClient[jiraClient] || { total: 0 };
+      c.total += dur;
+    }
+  }
+  return { byJiraProj, byClient };
+}
+
+// ════════════════════════════════════════════════════════════════
+// BUILD DASHBOARD DATA
+// ════════════════════════════════════════════════════════════════
+function buildData(jiraByClient, cwByJiraProj, cwByClient) {
+  const clients = [];
+
+  const allClients = new Set([...Object.keys(jiraByClient), ...Object.keys(cwByClient)]);
+
+  for (const clientName of [...allClients].sort()) {
+    const projects = jiraByClient[clientName] || {};
+    const color    = CLIENT_COLORS[clientName] || '#667eea';
+    const projList = [];
+
+    let totalEst = 0, totalCons = 0, totalPend = 0, totalTareas = 0;
+
+    for (const projName of Object.keys(projects).sort()) {
+      const tareas = projects[projName];
+      const cw     = cwByJiraProj[projName] || { total: 0, users: {} };
+
+      const pEst  = tareas.reduce((s,t) => s + (t.horas_estimadas  || 0), 0);
+      const pCons = tareas.reduce((s,t) => s + (t.horas_consumidas || 0), 0);
+      const pPend = tareas.reduce((s,t) => s + (t.horas_pendientes || 0), 0);
+
+      totalEst  += pEst; totalCons += pCons; totalPend += pPend; totalTareas += tareas.length;
+
+      const cwUsers = Object.entries(cw.users)
+        .sort(([,a],[,b]) => b - a)
+        .map(([n, h]) => ({ nombre: n, horas: Math.round(h * 10) / 10 }));
+
+      const tareasSorted = [...tareas].sort((a, b) => {
+        const af = a.horas_estimadas == null, bf = b.horas_estimadas == null;
+        if (af !== bf) return af ? 1 : -1;
+        if (!a.fecha_fin && !b.fecha_fin) return 0;
+        if (!a.fecha_fin) return 1;
+        if (!b.fecha_fin) return -1;
+        return a.fecha_fin - b.fecha_fin;
+      });
+
+      projList.push({
+        nombre: projName,
+        horas_estimadas:       Math.round(pEst  * 10) / 10,
+        horas_consumidas_jira: Math.round(pCons * 10) / 10,
+        horas_pendientes_jira: Math.round(pPend * 10) / 10,
+        horas_clockify:        Math.round(cw.total * 10) / 10,
+        cw_users:              cwUsers,
+        tareas:                tareasSorted,
+      });
+    }
+
+    clients.push({
+      nombre: clientName, color,
+      kpis: {
+        horas_estimadas:  Math.round(totalEst  * 10) / 10,
+        horas_consumidas: Math.round(totalCons * 10) / 10,
+        horas_pendientes: Math.round(totalPend * 10) / 10,
+        horas_clockify:   Math.round((cwByClient[clientName]?.total || 0) * 10) / 10,
+        total_tareas:     totalTareas,
+        total_proyectos:  Object.keys(projects).length,
+      },
+      proyectos: projList,
+    });
+  }
+  return clients;
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER HELPERS
+// ════════════════════════════════════════════════════════════════
+function initials(n) {
+  return (n || '?').split(' ').map(w => w[0] || '').join('').slice(0,2).toUpperCase();
+}
+function semDot(s) {
+  const ico = { verde:'✓', amarillo:'!', rojo:'✗', gris:'–' };
+  return `<div class="sem sem-${s}">${ico[s]||'–'}</div>`;
+}
+function hrsBadge(val, sem) {
+  if (val == null) return `<span class="hrs-badge hrs-gris">—</span>`;
+  const v = typeof val === 'number' ? (val % 1 === 0 ? val : val.toFixed(1)) : val;
+  return `<span class="hrs-badge hrs-${sem}">${v}h</span>`;
+}
+function desvioChip(t) {
+  if (!t.fecha_fin || !t.fecha_fin_real) return '';
+  const d = t.desvio_dias;
+  if (d == null) return '';
+  const cls = d > 0 ? 'dc-rojo' : 'dc-verde';
+  const lbl = d === 0 ? 'En fecha' : d > 0 ? `+${d}d` : `${d}d`;
+  return `<br><span class="desvio-chip ${cls}">${lbl}</span>`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER TASK ROW
+// ════════════════════════════════════════════════════════════════
+function renderTask(t) {
+  const done = ESTADOS_DONE.has((t.estado || '').toLowerCase());
+  const sh = t.sem_horas, sf = t.sem_fecha;
+
+  const overBadge = (t.horas_estimadas != null && t.horas_consumidas != null)
+    ? (t.horas_consumidas > t.horas_estimadas
+        ? `<span style="color:var(--red)"  title="Sobre presupuesto">●</span>`
+        : `<span style="color:var(--green)" title="Dentro del presupuesto">●</span>`)
+    : '—';
+
+  const pendSem = sh === 'rojo' ? 'rojo' : 'gris';
+
+  return `<tr>
+    <td>
+      ${t.id ? `<div class="task-id">${t.id}</div>` : ''}
+      <div class="task-name">${t.resumen || '—'}</div>
+      <span class="task-estado ${done ? 'done' : ''}">${t.estado || '—'}</span>
+    </td>
+    <td>
+      <div class="persona-badge">
+        <div class="persona-av">${initials(t.persona)}</div>
+        <span style="font-size:.77rem">${t.persona}</span>
+      </div>
+    </td>
+    <td style="text-align:center">${semDot(sh)}</td>
+    <td>${hrsBadge(t.horas_estimadas, 'gris')}</td>
+    <td>${hrsBadge(t.horas_consumidas, sh)}</td>
+    <td>${hrsBadge(t.horas_pendientes, pendSem)}</td>
+    <td style="text-align:center">${semDot(sf)}</td>
+    <td class="date-val">${fmtDate(t.fecha_fin)}</td>
+    <td class="date-val">${fmtDate(t.fecha_fin_real)}${desvioChip(t)}</td>
+    <td style="text-align:center">${overBadge}</td>
+  </tr>`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER PROJECT
+// ════════════════════════════════════════════════════════════════
+function renderProject(p, ci, pi, color) {
+  const divId   = `pb-${ci}-${pi}`;   // outer collapsible div
+  const headId  = `ph-${ci}-${pi}`;   // header
+  const tbodyId = `tb-${ci}-${pi}`;   // tbody (for filter/sort)
+  const tareas  = p.tareas;
+
+  const verde    = tareas.filter(t => t.sem_fecha === 'verde').length;
+  const amarillo = tareas.filter(t => t.sem_fecha === 'amarillo').length;
+  const rojo     = tareas.filter(t => t.sem_fecha === 'rojo').length;
+  const over     = tareas.filter(t => t.sem_horas === 'rojo').length;
+
+  const semSum = [
+    rojo     ? `<span style="color:var(--red);font-size:.72rem;font-weight:700">● ${rojo} retrasada${rojo>1?'s':''}</span>` : '',
+    amarillo ? `<span style="color:var(--yellow);font-size:.72rem;font-weight:700">● ${amarillo} por vencer</span>` : '',
+    verde    ? `<span style="color:var(--green);font-size:.72rem;font-weight:700">● ${verde} ok</span>` : '',
+    over     ? `<span style="color:var(--red);font-size:.72rem;font-weight:700">⚠ ${over} sobre hs</span>` : '',
+  ].filter(Boolean).join('&nbsp;');
+
+  const cwBar = (p.cw_users.length > 0 && p.horas_clockify > 0) ? `
+    <div class="cw-bar">
+      <span class="cw-label">⏱ Clockify ${p.horas_clockify}h</span>
+      ${p.cw_users.slice(0,6).map(u =>
+        `<div class="cw-person">${u.nombre.split('.')[0]} <span>${u.horas}h</span></div>`
+      ).join('')}
+    </div>` : '';
+
+  const rows = tareas.length
+    ? tareas.map(renderTask).join('')
+    : `<tr><td colspan="10" class="empty-td">Sin tareas con datos para este proyecto</td></tr>`;
+
+  return `
+  <div class="project-card">
+    <div class="project-header" id="${headId}" onclick="toggleProj('${divId}','${headId}')">
+      <div class="proj-dot" style="background:${color}"></div>
+      <div class="proj-name">${p.nombre}</div>
+      <div class="proj-meta">
+        ${semSum ? `<span>${semSum}</span>` : ''}
+        ${p.horas_estimadas  > 0 ? `<span>Est: <strong>${p.horas_estimadas}h</strong></span>` : ''}
+        ${p.horas_clockify   > 0 ? `<span>Clockify: <strong>${p.horas_clockify}h</strong></span>` : ''}
+        <span>Tareas: <strong>${tareas.length}</strong></span>
+      </div>
+      <div class="proj-toggle">▼</div>
+    </div>
+    <div id="${divId}" style="display:none">
+      ${cwBar}
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th class="sortable" style="min-width:210px" onclick="sortBy('resumen','${tbodyId}')">Tarea</th>
+            <th class="sortable" style="min-width:140px" onclick="sortBy('persona','${tbodyId}')">Persona</th>
+            <th class="sortable" onclick="sortBy('sem_horas','${tbodyId}')">Hs ●</th>
+            <th class="sortable" onclick="sortBy('horas_estimadas','${tbodyId}')">Hs Est.</th>
+            <th class="sortable" onclick="sortBy('horas_consumidas','${tbodyId}')">Hs Cons.</th>
+            <th class="sortable" onclick="sortBy('horas_pendientes','${tbodyId}')">Hs Pend.</th>
+            <th class="sortable" onclick="sortBy('sem_fecha','${tbodyId}')">Fecha ●</th>
+            <th class="sortable" style="min-width:85px" onclick="sortBy('fecha_fin','${tbodyId}')">Fecha Fin</th>
+            <th class="sortable" style="min-width:105px" onclick="sortBy('fecha_fin_real','${tbodyId}')">Fin Real / Desvío</th>
+            <th>⚠</th>
+          </tr></thead>
+          <tbody id="${tbodyId}">${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER CLIENT VIEW
+// ════════════════════════════════════════════════════════════════
+function renderClientView(c, ci) {
+  const k = c.kpis;
+  const kpiCards = [
+    { label: 'Hs Estimadas (Jira)',    value: k.horas_estimadas  > 0 ? k.horas_estimadas+'h'  : '—' },
+    { label: 'Hs Consumidas (Jira)',   value: k.horas_consumidas > 0 ? k.horas_consumidas+'h' : '—' },
+    { label: 'Hs Pendientes (Jira)',   value: k.horas_pendientes > 0 ? k.horas_pendientes+'h' : '—' },
+    { label: 'Hs Clockify',            value: k.horas_clockify   > 0 ? k.horas_clockify+'h'   : '—' },
+    { label: 'Tareas',                 value: k.total_tareas },
+    { label: 'Proyectos',              value: k.total_proyectos },
+  ].map(kp => `
+    <div class="kpi-card" style="--kc:${c.color}">
+      <div class="kpi-label">${kp.label}</div>
+      <div class="kpi-value">${kp.value}</div>
+    </div>`).join('');
+
+  const projHtml = c.proyectos.map((p, pi) => renderProject(p, ci, pi, c.color)).join('');
+
+  return `
+  <div class="client-view" id="cv-${ci}">
+    <div class="client-header">
+      <div class="client-color-dot" style="background:${c.color}"></div>
+      <div class="client-name">${c.nombre}</div>
+    </div>
+    <div class="kpi-row">${kpiCards}</div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">Horas por Proyecto</div>
+        <div class="chart-wrap" style="height:${Math.max(130, c.proyectos.length * 42 + 55)}px">
+          <canvas id="chart-bar-${ci}"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Semáforo Fechas</div>
+        <div class="chart-wrap" style="height:185px">
+          <canvas id="chart-fecha-${ci}"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Semáforo Horas</div>
+        <div class="chart-wrap" style="height:185px">
+          <canvas id="chart-horas-${ci}"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>En fecha / Dentro del presupuesto</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Por vencer (≤7 días) / Al límite (≥80%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Retrasado / Sobre presupuesto</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--gray)"></div>Sin datos</div>
+    </div>
+    ${projHtml || '<p style="color:var(--muted);padding:20px 0">No hay proyectos con datos para este cliente.</p>'}
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// FILTER & SORT STATE
+// ════════════════════════════════════════════════════════════════
+const filterState = { search: '', persona: '', estado: '', semFecha: '', semHoras: '' };
+const sortState   = {};   // bodyId → { col, dir }
+
+// Map sem value to sort order
+const SEM_ORDER = { rojo: 0, amarillo: 1, verde: 2, gris: 3 };
+
+function getSortValue(t, col) {
+  switch (col) {
+    case 'resumen':         return (t.resumen || '').toLowerCase();
+    case 'persona':         return (t.persona || '').toLowerCase();
+    case 'sem_horas':       return SEM_ORDER[t.sem_horas] ?? 9;
+    case 'horas_estimadas': return t.horas_estimadas ?? -1;
+    case 'horas_consumidas':return t.horas_consumidas ?? -1;
+    case 'horas_pendientes':return t.horas_pendientes ?? -1;
+    case 'sem_fecha':       return SEM_ORDER[t.sem_fecha] ?? 9;
+    case 'fecha_fin':       return t.fecha_fin ? t.fecha_fin.getTime() : Infinity;
+    case 'fecha_fin_real':  return t.fecha_fin_real ? t.fecha_fin_real.getTime() : Infinity;
+    default: return 0;
+  }
+}
+
+function applyFiltersAndSort(tareas, bodyId) {
+  const { search, persona, estado, semFecha, semHoras } = filterState;
+  const term = search.toLowerCase();
+
+  let result = tareas.filter(t => {
+    if (term    && !(t.resumen.toLowerCase().includes(term) || t.id.toLowerCase().includes(term))) return false;
+    if (persona && t.persona !== persona) return false;
+    if (estado  && t.estado  !== estado)  return false;
+    if (semFecha && t.sem_fecha !== semFecha) return false;
+    if (semHoras && t.sem_horas !== semHoras) return false;
+    return true;
+  });
+
+  const ss = sortState[bodyId];
+  if (ss) {
+    result = [...result].sort((a, b) => {
+      const av = getSortValue(a, ss.col);
+      const bv = getSortValue(b, ss.col);
+      if (av < bv) return ss.dir === 'asc' ? -1 : 1;
+      if (av > bv) return ss.dir === 'asc' ?  1 : -1;
+      return 0;
+    });
+  }
+  return result;
+}
+
+function refreshTables() {
+  if (!_clients.length) return;
+  const c  = _clients[activeIdx];
+  let total = 0, shown = 0;
+
+  c.proyectos.forEach((p, pi) => {
+    const tbodyId = `tb-${activeIdx}-${pi}`;
+    const tbody   = document.getElementById(tbodyId);
+    if (!tbody) return;
+
+    total += p.tareas.length;
+    const filtered = applyFiltersAndSort(p.tareas, tbodyId);
+    shown += filtered.length;
+
+    tbody.innerHTML = filtered.length
+      ? filtered.map(renderTask).join('')
+      : `<tr><td colspan="10" class="empty-td">Sin resultados para los filtros aplicados</td></tr>`;
+  });
+
+  // Update count label
+  const hasFilter = filterState.search || filterState.persona || filterState.estado ||
+                    filterState.semFecha || filterState.semHoras;
+  document.getElementById('f-count').textContent =
+    hasFilter ? `Mostrando ${shown} de ${total} tareas` : '';
+}
+
+function onFilterChange() {
+  filterState.search  = document.getElementById('f-search').value;
+  filterState.persona = document.getElementById('f-persona').value;
+  filterState.estado  = document.getElementById('f-estado').value;
+  refreshTables();
+}
+
+function setChip(field, value, btn) {
+  filterState[field] = value;
+  // Reset siblings
+  const prefix = field === 'semFecha' ? 'fc-fecha-' : 'fc-horas-';
+  ['', 'verde', 'amarillo', 'rojo'].forEach(v => {
+    const el = document.getElementById(prefix + v);
+    if (!el) return;
+    el.className = 'f-chip' + (v === value ? (v ? ' act-' + v : ' active') : '');
+  });
+  refreshTables();
+}
+
+function clearFilters() {
+  filterState.search = filterState.persona = filterState.estado =
+  filterState.semFecha = filterState.semHoras = '';
+  document.getElementById('f-search').value  = '';
+  document.getElementById('f-persona').value = '';
+  document.getElementById('f-estado').value  = '';
+  // Reset all chips
+  ['fecha','horas'].forEach(f => setChip('sem' + f.charAt(0).toUpperCase() + f.slice(1), '',
+    document.getElementById('fc-' + f + '-')));
+}
+
+function sortBy(col, bodyId) {
+  const cur = sortState[bodyId];
+  if (cur && cur.col === col) {
+    cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortState[bodyId] = { col, dir: 'asc' };
+  }
+
+  // Update header classes in that table
+  const tbody  = document.getElementById(bodyId);
+  const thead  = tbody?.closest('table')?.querySelector('thead');
+  if (thead) {
+    thead.querySelectorAll('th.sortable').forEach(th => {
+      th.classList.remove('sort-asc','sort-desc');
+      const clickStr = th.getAttribute('onclick') || '';
+      if (clickStr.includes(`'${col}'`)) {
+        th.classList.add(sortState[bodyId].dir === 'asc' ? 'sort-asc' : 'sort-desc');
+      }
+    });
+  }
+  refreshTables();
+}
+
+function populateFilterOptions(ci) {
+  const c = _clients[ci];
+  if (!c) return;
+  const tareas = c.proyectos.flatMap(p => p.tareas);
+
+  const personas = [...new Set(tareas.map(t => t.persona).filter(Boolean))].sort();
+  const estados  = [...new Set(tareas.map(t => t.estado).filter(Boolean))].sort();
+
+  const pSel = document.getElementById('f-persona');
+  const eSel = document.getElementById('f-estado');
+  pSel.innerHTML = `<option value="">Persona (todas)</option>` +
+    personas.map(p => `<option value="${p}">${p}</option>`).join('');
+  eSel.innerHTML = `<option value="">Estado (todos)</option>` +
+    estados.map(e => `<option value="${e}">${e}</option>`).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+// CHARTS
+// ════════════════════════════════════════════════════════════════
+const chartInstances = {};
+
+function renderCharts(ci) {
+  const c = _clients[ci];
+  if (!c) return;
+
+  // Destroy previous instances for this tab
+  if (chartInstances[ci]) {
+    chartInstances[ci].forEach(ch => { try { ch.destroy(); } catch(e){} });
+    delete chartInstances[ci];
+  }
+
+  const instances = [];
+
+  // ── Bar chart: hours per project ─────────────────────────────
+  const barCanvas = document.getElementById(`chart-bar-${ci}`);
+  if (barCanvas) {
+    const shortNames = c.proyectos.map(p =>
+      p.nombre.length > 26 ? p.nombre.slice(0, 24) + '…' : p.nombre
+    );
+    instances.push(new Chart(barCanvas, {
+      type: 'bar',
+      data: {
+        labels: shortNames,
+        datasets: [
+          { label: 'Estimadas',         data: c.proyectos.map(p => p.horas_estimadas),       backgroundColor: '#c7d2fe', borderRadius: 3 },
+          { label: 'Consumidas (Jira)', data: c.proyectos.map(p => p.horas_consumidas_jira), backgroundColor: c.color,   borderRadius: 3 },
+          { label: 'Clockify',          data: c.proyectos.map(p => p.horas_clockify),         backgroundColor: '#fde68a', borderRadius: 3 },
+        ]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 10, padding: 8 } }
+        },
+        scales: {
+          x: { beginAtZero: true, ticks: { font: { size: 10 } }, grid: { color: '#f1f5f9' } },
+          y: { ticks: { font: { size: 10 } }, grid: { display: false } }
+        }
+      }
+    }));
+  }
+
+  // ── Donut charts: semáforo distribution ──────────────────────
+  const allTareas = c.proyectos.flatMap(p => p.tareas);
+  const fC = { verde: 0, amarillo: 0, rojo: 0, gris: 0 };
+  const hC = { verde: 0, amarillo: 0, rojo: 0, gris: 0 };
+  allTareas.forEach(t => {
+    fC[t.sem_fecha] = (fC[t.sem_fecha] || 0) + 1;
+    hC[t.sem_horas] = (hC[t.sem_horas] || 0) + 1;
+  });
+
+  const semColors  = ['#22c55e', '#f59e0b', '#ef4444', '#94a3b8'];
+  const donutOpts  = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '62%',
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { size: 9 }, boxWidth: 9, padding: 6 } },
+      tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} tareas` } }
+    }
+  };
+
+  const fechaCanvas = document.getElementById(`chart-fecha-${ci}`);
+  if (fechaCanvas) {
+    instances.push(new Chart(fechaCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['En fecha', 'Por vencer', 'Retrasado', 'Sin datos'],
+        datasets: [{ data: [fC.verde, fC.amarillo, fC.rojo, fC.gris], backgroundColor: semColors, borderWidth: 2, borderColor: '#fff' }]
+      },
+      options: donutOpts
+    }));
+  }
+
+  const horasCanvas = document.getElementById(`chart-horas-${ci}`);
+  if (horasCanvas) {
+    instances.push(new Chart(horasCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['Dentro presup.', 'Al límite', 'Sobre presup.', 'Sin datos'],
+        datasets: [{ data: [hC.verde, hC.amarillo, hC.rojo, hC.gris], backgroundColor: semColors, borderWidth: 2, borderColor: '#fff' }]
+      },
+      options: donutOpts
+    }));
+  }
+
+  chartInstances[ci] = instances;
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER ALL
+// ════════════════════════════════════════════════════════════════
+let activeIdx = 0;
+
+function renderDashboard(clients) {
+  // Tabs
+  const bar = document.getElementById('tabs-bar');
+  bar.innerHTML = clients.map((c, i) => `
+    <button class="tab ${i === activeIdx ? 'active' : ''}"
+            style="--tab-color:${c.color}"
+            onclick="switchTab(${i})">
+      ${c.nombre}
+      <span class="tab-badge">${c.kpis.total_tareas}</span>
+    </button>`).join('');
+
+  // Main
+  document.getElementById('main').innerHTML =
+    clients.map((c, i) => renderClientView(c, i)).join('');
+
+  // Activate first tab
+  document.querySelectorAll('.client-view').forEach((v, i) =>
+    v.classList.toggle('active', i === activeIdx));
+
+  // Auto-expand first project of active client
+  autoExpand(activeIdx, clients);
+
+  // Show filter bar and populate options
+  document.getElementById('filter-bar').classList.add('visible');
+  populateFilterOptions(activeIdx);
+  renderCharts(activeIdx);
+}
+
+function autoExpand(ci, clients) {
+  const c = clients[ci];
+  if (c && c.proyectos.length > 0) {
+    const body = document.getElementById(`pb-${ci}-0`);
+    const head = document.getElementById(`ph-${ci}-0`);
+    if (body) { body.style.display = 'block'; head?.classList.add('open'); }
+  }
+}
+
+let _clients = [];
+function switchTab(i) {
+  activeIdx = i;
+  document.querySelectorAll('.tab').forEach((t, j) => t.classList.toggle('active', j === i));
+  document.querySelectorAll('.client-view').forEach((v, j) => v.classList.toggle('active', j === i));
+  autoExpand(i, _clients);
+  clearFilters();
+  populateFilterOptions(i);
+  renderCharts(i);
+}
+
+function toggleProj(bodyId, headId) {
+  const body = document.getElementById(bodyId);
+  const head = document.getElementById(headId);
+  if (!body) return;
+  const open = body.style.display === 'block';
+  body.style.display = open ? 'none' : 'block';
+  head?.classList.toggle('open', !open);
+}
+
+// ════════════════════════════════════════════════════════════════
+// API MODE
+// ════════════════════════════════════════════════════════════════
+let apiMode = false;
+
+function setMode(mode) {
+  apiMode = mode === 'api';
+  document.getElementById('mt-csv').classList.toggle('active', !apiMode);
+  document.getElementById('mt-api').classList.toggle('active',  apiMode);
+  document.getElementById('csv-mode-form').style.display = apiMode ? 'none'  : 'block';
+  document.getElementById('api-mode-form').style.display = apiMode ? 'block' : 'none';
+
+  if (apiMode) {
+    // Default date to start of current year
+    const dfEl = document.getElementById('api-date-from');
+    if (!dfEl.value) dfEl.value = `${new Date().getFullYear()}-01-01`;
+
+    // Try to load saved config from server
+    fetch('/api/config', { signal: AbortSignal.timeout(2000) })
+      .then(r => r.json())
+      .then(cfg => {
+        if (cfg.jira_domain) document.getElementById('api-jira-domain').value = cfg.jira_domain;
+        if (cfg.jira_email)  document.getElementById('api-jira-email').value  = cfg.jira_email;
+        if (cfg.jira_jql)    document.getElementById('api-jira-jql').value    = cfg.jira_jql;
+        if (cfg.clockify_date_from)
+          document.getElementById('api-date-from').value = cfg.clockify_date_from.slice(0, 10);
+
+        const parts = [cfg.has_jira && 'Jira', cfg.has_clockify && 'Clockify'].filter(Boolean);
+        if (parts.length)
+          document.getElementById('api-status').innerHTML =
+            `<span style="color:#22c55e">✓ Credenciales guardadas: ${parts.join(' + ')}</span>`;
+      })
+      .catch(() => {
+        document.getElementById('api-status').innerHTML =
+          `<span style="color:#ef4444">⚠ Servidor no detectado. Corriendo <code>python servidor.py</code>?</span>`;
+      });
+  }
+}
+
+// Convert ISO date strings from server into JS Date objects
+function apiDataToClients(clients) {
+  return clients.map(c => ({
+    ...c,
+    proyectos: c.proyectos.map(p => ({
+      ...p,
+      tareas: p.tareas.map(t => ({
+        ...t,
+        fecha_fin:      t.fecha_fin      ? new Date(t.fecha_fin      + 'T00:00:00') : null,
+        fecha_fin_real: t.fecha_fin_real ? new Date(t.fecha_fin_real.slice(0, 10) + 'T00:00:00') : null,
+      })),
+    })),
+  }));
+}
+
+async function loadFromAPI() {
+  // Save credentials to server config
+  const vals = {
+    jira_domain:        document.getElementById('api-jira-domain').value.trim(),
+    jira_email:         document.getElementById('api-jira-email').value.trim(),
+    jira_token:         document.getElementById('api-jira-token').value.trim(),
+    clockify_key:       document.getElementById('api-cw-key').value.trim(),
+    jira_jql:           document.getElementById('api-jira-jql').value.trim(),
+    clockify_date_from: (document.getElementById('api-date-from').value || '') + 'T00:00:00.000Z',
+  };
+
+  try {
+    await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(vals),
+      signal: AbortSignal.timeout(3000),
+    });
+  } catch(e) {
+    alert('No se pudo conectar al servidor.\nAsegurate de correr: python servidor.py');
+    return;
+  }
+
+  document.getElementById('upload-screen').style.display  = 'none';
+  document.getElementById('loading-screen').style.display = 'flex';
+
+  try {
+    const r    = await fetch('/api/data', { signal: AbortSignal.timeout(120000) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Error del servidor');
+
+    _clients = apiDataToClients(data.clients);
+    document.getElementById('header-sub').textContent =
+      'Jira + Clockify (API) · ' + new Date(data.ts).toLocaleString('es-AR');
+
+    document.getElementById('loading-screen').style.display  = 'none';
+    document.getElementById('dashboard-screen').style.display = 'block';
+    document.getElementById('btn-refresh').style.display      = 'inline-flex';
+
+    activeIdx = 0;
+    renderDashboard(_clients);
+  } catch(e) {
+    alert('Error al obtener datos: ' + e.message);
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('upload-screen').style.display  = 'flex';
+  }
+}
+
+async function refreshFromAPI() {
+  document.getElementById('dashboard-screen').style.display = 'none';
+  document.getElementById('loading-screen').style.display  = 'flex';
+
+  try {
+    const r    = await fetch('/api/data', { signal: AbortSignal.timeout(120000) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Error del servidor');
+
+    _clients = apiDataToClients(data.clients);
+    document.getElementById('header-sub').textContent =
+      'Jira + Clockify (API) · ' + new Date(data.ts).toLocaleString('es-AR');
+
+    document.getElementById('loading-screen').style.display  = 'none';
+    document.getElementById('dashboard-screen').style.display = 'block';
+
+    activeIdx = 0;
+    renderDashboard(_clients);
+  } catch(e) {
+    alert('Error al actualizar: ' + e.message);
+    document.getElementById('loading-screen').style.display  = 'none';
+    document.getElementById('dashboard-screen').style.display = 'block';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// GENERATE
+// ════════════════════════════════════════════════════════════════
+async function generate() {
+  document.getElementById('upload-screen').style.display  = 'none';
+  document.getElementById('loading-screen').style.display = 'flex';
+
+  try {
+    let jiraRows = [], cwRows = [];
+    if (jiraFile) jiraRows = await parseCSV(jiraFile);
+    if (cwFile)   cwRows   = await parseCSV(cwFile);
+
+    const jiraByClient = processJira(jiraRows);
+    const { byJiraProj, byClient } = processClockify(cwRows);
+
+    _clients = buildData(jiraByClient, byJiraProj, byClient);
+
+    const srcLabels = [jiraFile && 'Jira', cwFile && 'Clockify'].filter(Boolean).join(' + ');
+    document.getElementById('header-sub').textContent = srcLabels + ' · ' + new Date().toLocaleDateString('es-AR');
+
+    document.getElementById('loading-screen').style.display  = 'none';
+    document.getElementById('dashboard-screen').style.display = 'block';
+
+    renderDashboard(_clients);
+  } catch (e) {
+    alert('Error al procesar los archivos: ' + e.message);
+    console.error(e);
+    document.getElementById('loading-screen').style.display  = 'none';
+    document.getElementById('upload-screen').style.display   = 'flex';
+  }
+}
+
+function resetApp() {
+  jiraFile = cwFile = null;
+  activeIdx = 0;
+  document.getElementById('jira-name').textContent = '';
+  document.getElementById('cw-name').textContent   = '';
+  document.getElementById('dz-jira').classList.remove('done');
+  document.getElementById('dz-cw').classList.remove('done');
+  document.getElementById('btn-gen').disabled = true;
+  document.getElementById('filter-bar').classList.remove('visible');
+  document.getElementById('dashboard-screen').style.display = 'none';
+  document.getElementById('upload-screen').style.display    = 'flex';
+  document.getElementById('btn-refresh').style.display      = 'none';
+  setMode('csv');
+}
+</script>
+</body>
+</html>
