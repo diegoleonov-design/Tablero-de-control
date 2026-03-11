@@ -6,6 +6,7 @@
   <title>Flujo de Caja — Altromondo</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -356,7 +357,8 @@
         <span class="section-title">Facturas de Venta</span>
         <div style="display:flex;align-items:center;gap:12px;">
           <span id="resumen-ventas" style="font-size:0.82rem; color:var(--muted)"></span>
-          <button class="btn btn-ghost btn-sm" onclick="importarDeudores()">⬇ Importar deudores</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('input-pdf-deudores').click()">⬇ Importar deudores (PDF)</button>
+          <input type="file" id="input-pdf-deudores" accept=".pdf" style="display:none" onchange="importarDesdePDF(this)" />
         </div>
       </div>
       <div class="filter-tabs">
@@ -1001,41 +1003,105 @@ function renderChart(proyeccion) {
   });
 }
 
-// ── Importar deudores desde PDF (10/02/2026) ──────────────────────────────────
-const DEUDORES_PDF = [
-  { cliente: 'COMPAÑIA DE TRANSPORTE DE ENERGIA ELECTR', descripcion: 'FCC A 0004-00000299', monto: 25555200.00, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-02-16' },
-  { cliente: 'TRANSBA SA',                               descripcion: 'FCC A 0004-00000300', monto: 17036800.00, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-02-16' },
-  { cliente: 'SACDE SA',                                 descripcion: 'FCC A 0004-00000295', monto:  4752880.00, fecha_emision: '2026-01-09', fecha_cobro_esperada: '2026-02-08' },
-  { cliente: 'SACDE SA',                                 descripcion: 'FCC A 0004-00000298', monto:  8211060.00, fecha_emision: '2026-01-15', fecha_cobro_esperada: '2026-02-14' },
-  { cliente: 'SACDE SA',                                 descripcion: 'FCC A 0004-00000301', monto: 12127104.00, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
-  { cliente: 'SACDE SA',                                 descripcion: 'FCC A 0004-00000302', monto:  4235000.00, fecha_emision: '2026-02-04', fecha_cobro_esperada: '2026-02-19' },
-  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000397',  monto:  7354864.00, fecha_emision: '2026-01-01', fecha_cobro_esperada: '2026-01-31' },
-  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000405',  monto:  7354864.00, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
-  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000406',  monto:  5925612.00, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
-  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000407',  monto:  5925612.00, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
-  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000408',  monto:  7722607.20, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
-  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000409',  monto:  1534473.60, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
-  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000410',  monto:  7722607.20, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
-  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000411',  monto:   224820.42, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
-  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000412',  monto:   179496.24, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
-];
+// ── Importar deudores desde PDF ───────────────────────────────────────────────
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-async function importarDeudores() {
-  // Determinar cuáles ya están cargadas por número de comprobante
+function parseFechaArg(str) {
+  const [d, m, y] = str.split('/');
+  return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+}
+
+function parseMontoArg(str) {
+  return parseFloat(str.replace(/\./g, '').replace(',', '.'));
+}
+
+async function parsePDFDeudores(file) {
+  const buffer = await file.arrayBuffer();
+  const pdf    = await pdfjsLib.getDocument({ data: buffer }).promise;
+
+  // Extraer todos los items de texto con su posición
+  const items = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page    = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    for (const item of content.items) {
+      if (item.str.trim()) {
+        items.push({ text: item.str, x: item.transform[4], y: item.transform[5], page: p });
+      }
+    }
+  }
+
+  // Ordenar por página > y desc > x asc y agrupar en líneas (tolerancia 3px)
+  items.sort((a, b) => a.page - b.page || b.y - a.y || a.x - b.x);
+  const lines = [];
+  let cur = null;
+  for (const it of items) {
+    if (!cur || it.page !== cur.page || Math.abs(it.y - cur.y) > 3) {
+      if (cur) lines.push(cur.text.trim());
+      cur = { y: it.y, page: it.page, text: it.text };
+    } else {
+      cur.text += ' ' + it.text;
+    }
+  }
+  if (cur) lines.push(cur.text.trim());
+
+  // Parsear líneas
+  const facturas = [];
+  let currentCliente = '';
+  const reCliente  = /Cliente:\s+\d+\s+(.+?)\s+-\s+Cuenta Corriente/;
+  const reFactura  = /^(\d{2}\/\d{2}\/\d{4})\s+((?:FCC|FC)\s+A\s+\d{4}\s*-\s*\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+.+?\$\s*([\d.,]+)/;
+
+  for (const line of lines) {
+    const mc = line.match(reCliente);
+    if (mc) { currentCliente = mc[1].trim(); continue; }
+
+    const mf = line.match(reFactura);
+    if (mf && currentCliente) {
+      const monto = parseMontoArg(mf[4]);
+      if (monto > 0) {
+        facturas.push({
+          cliente:              currentCliente,
+          descripcion:          mf[2].replace(/\s+-\s+/, '-').trim(),
+          monto,
+          fecha_emision:        parseFechaArg(mf[1]),
+          fecha_cobro_esperada: parseFechaArg(mf[3]),
+        });
+      }
+    }
+  }
+  return facturas;
+}
+
+async function importarDesdePDF(input) {
+  const file = input.files[0];
+  input.value = ''; // reset para permitir cargar el mismo archivo de nuevo
+  if (!file) return;
+
+  let facturas;
+  try {
+    facturas = await parsePDFDeudores(file);
+  } catch (e) {
+    return alert('Error al leer el PDF: ' + e.message);
+  }
+
+  if (!facturas.length) {
+    return alert('No se encontraron facturas en el archivo. Verificá que sea el reporte de Composición de Saldos.');
+  }
+
   const existentes = new Set(allVentas.map(v => v.descripcion));
-  const nuevas = DEUDORES_PDF.filter(f => !existentes.has(f.descripcion));
+  const nuevas = facturas.filter(f => !existentes.has(f.descripcion));
 
   if (!nuevas.length) {
-    alert('Todas las facturas del reporte ya están cargadas.');
-    return;
+    return alert('Todas las facturas del archivo ya están cargadas.');
   }
 
   const resumen = nuevas.map(f => `• ${f.descripcion} — ${f.cliente} — $${fmt(f.monto)}`).join('\n');
-  if (!confirm(`Se importarán ${nuevas.length} factura(s):\n\n${resumen}\n\n¿Continuar?`)) return;
+  if (!confirm(`Se importarán ${nuevas.length} factura(s) de ${file.name}:\n\n${resumen}\n\n¿Continuar?`)) return;
 
   const rows = nuevas.map(f => ({ ...f, estado: 'pendiente' }));
   const { error } = await sb.from('ventas').insert(rows);
-  if (error) return alert('Error al importar: ' + error.message);
+  if (error) return alert('Error al guardar: ' + error.message);
 
   await loadVentas();
   renderDashboard();
