@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flujo de Caja — Altromondo</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #f1f5f9;
+      --surface: #ffffff;
+      --border:  #e2e8f0;
+      --text:    #1e293b;
+      --muted:   #64748b;
+      --green:   #22c55e;  --green-bg:  #dcfce7;  --green-text:  #166534;
+      --red:     #ef4444;  --red-bg:    #fee2e2;  --red-text:    #991b1b;
+      --blue:    #3b82f6;  --blue-bg:   #dbeafe;  --blue-text:   #1d4ed8;
+      --yellow:  #f59e0b;  --yellow-bg: #fef3c7;  --yellow-text: #92400e;
+      --gray:    #94a3b8;  --gray-bg:   #f1f5f9;  --gray-text:   #64748b;
+      --radius: 10px;
+    }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+    }
+    header h1 { font-size: 1.1rem; font-weight: 700; }
+    header a { font-size: 0.85rem; color: var(--muted); text-decoration: none; }
+    header a:hover { color: var(--text); }
+
+    /* ── Nav ── */
+    nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      gap: 4px;
+    }
+    nav button {
+      padding: 14px 18px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: var(--muted);
+      border-bottom: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    nav button.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+    nav button:hover:not(.active) { color: var(--text); }
+
+    /* ── Layout ── */
+    main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── KPI Cards ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .kpi-card .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .kpi-card .value { font-size: 1.65rem; font-weight: 700; }
+    .kpi-card .sub { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+    .kpi-card.green .value { color: var(--green-text); }
+    .kpi-card.red   .value { color: var(--red-text); }
+    .kpi-card.blue  .value { color: var(--blue-text); }
+    .kpi-card.yellow .value { color: var(--yellow-text); }
+
+    /* ── Section ── */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .section-title { font-size: 1rem; font-weight: 600; }
+
+    /* ── Form ── */
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: 0.78rem; color: var(--muted); font-weight: 500; }
+    .form-group input,
+    .form-group select {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+      background: white;
+    }
+    .form-group input:focus,
+    .form-group select:focus { border-color: var(--blue); }
+    .form-actions { margin-top: 16px; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: opacity 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn:hover { opacity: 0.82; }
+    .btn-primary { background: var(--blue); color: white; }
+    .btn-success { background: var(--green); color: white; }
+    .btn-danger  { background: var(--red); color: white; }
+    .btn-ghost   { background: var(--gray-bg); color: var(--text); border: 1px solid var(--border); }
+    .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafbfc; }
+    .td-actions { display: flex; gap: 6px; align-items: center; }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-green  { background: var(--green-bg);  color: var(--green-text); }
+    .badge-yellow { background: var(--yellow-bg); color: var(--yellow-text); }
+    .badge-red    { background: var(--red-bg);    color: var(--red-text); }
+    .badge-blue   { background: var(--blue-bg);   color: var(--blue-text); }
+    .badge-gray   { background: var(--gray-bg);   color: var(--gray-text); }
+
+    /* ── Filter tabs ── */
+    .filter-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-tab {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      background: none;
+      color: var(--muted);
+      transition: all 0.15s;
+    }
+    .filter-tab.active { background: var(--blue); color: white; border-color: var(--blue); }
+    .filter-tab:hover:not(.active) { border-color: var(--blue); color: var(--blue); }
+
+    /* ── Chart ── */
+    .chart-container { position: relative; height: 280px; }
+
+    /* ── Saldo config ── */
+    .saldo-config {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 20px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .saldo-config input {
+      padding: 5px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 150px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .saldo-config input:focus { border-color: var(--blue); }
+    .saldo-config label { font-weight: 500; color: var(--text); }
+
+    /* ── Empty / Loading ── */
+    .empty   { text-align: center; padding: 40px; color: var(--muted); font-size: 0.9rem; }
+    .loading { text-align: center; padding: 20px; color: var(--muted); font-size: 0.85rem; }
+
+    /* ── Projection table ── */
+    .proj-table th, .proj-table td { padding: 12px 16px; }
+    .positive { color: var(--green-text); font-weight: 600; }
+    .negative { color: var(--red-text);   font-weight: 600; }
+
+    /* ── Toggle switch ── */
+    .toggle { position: relative; display: inline-block; width: 36px; height: 20px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #cbd5e1;
+      border-radius: 20px;
+      transition: 0.2s;
+    }
+    .toggle-slider::before {
+      position: absolute;
+      content: "";
+      height: 14px; width: 14px;
+      left: 3px; bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--green); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      main { padding: 12px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .kpi-grid  { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Flujo de Caja — Altromondo</h1>
+  <a href="index.html">← Dashboard</a>
+</header>
+
+<nav>
+  <button class="active" onclick="switchTab('dashboard', this)">Dashboard</button>
+  <button onclick="switchTab('ventas', this)">Ventas</button>
+  <button onclick="switchTab('compras', this)">Compras</button>
+  <button onclick="switchTab('gastos', this)">Gastos Fijos</button>
+</nav>
+
+<main>
+
+  <!-- ══════════════════ TAB: DASHBOARD ══════════════════ -->
+  <div id="tab-dashboard" class="tab-content active">
+
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card"><div class="label">Cargando...</div><div class="value">—</div></div>
+    </div>
+
+    <div class="saldo-config">
+      <label>Saldo inicial en caja:</label>
+      <input type="number" id="input-saldo-inicial" placeholder="0.00" step="0.01" />
+      <button class="btn btn-ghost btn-sm" onclick="guardarSaldoInicial()">Guardar</button>
+      <span style="font-size:0.78rem;">Ingresá el saldo de apertura una sola vez</span>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Proyección próximos 3 meses</span>
+      </div>
+      <div class="chart-container">
+        <canvas id="chart-proyeccion"></canvas>
+      </div>
+      <div style="margin-top: 24px;" class="table-wrap">
+        <table class="proj-table">
+          <thead>
+            <tr>
+              <th>Mes</th>
+              <th>Ingresos esperados</th>
+              <th>Egresos esperados</th>
+              <th>Flujo neto</th>
+              <th>Saldo proyectado</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-proyeccion">
+            <tr><td colspan="5" class="loading">Calculando proyección...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════ TAB: VENTAS ══════════════════ -->
+  <div id="tab-ventas" class="tab-content">
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Nueva Factura de Venta</span>
+      </div>
+      <form onsubmit="guardarVenta(event)">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Cliente *</label>
+            <input type="text" id="v-cliente" required placeholder="Nombre del cliente" />
+          </div>
+          <div class="form-group">
+            <label>Descripción / N° factura</label>
+            <input type="text" id="v-descripcion" placeholder="FA 0001-00000123" />
+          </div>
+          <div class="form-group">
+            <label>Monto *</label>
+            <input type="number" id="v-monto" required step="0.01" min="0" placeholder="0.00" />
+          </div>
+          <div class="form-group">
+            <label>Fecha de emisión *</label>
+            <input type="date" id="v-fecha-emision" required />
+          </div>
+          <div class="form-group">
+            <label>Fecha de cobro esperada *</label>
+            <input type="date" id="v-fecha-cobro" required />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Agregar factura</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Facturas de Venta</span>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span id="resumen-ventas" style="font-size:0.82rem; color:var(--muted)"></span>
+          <button class="btn btn-ghost btn-sm" onclick="importarDeudores()">⬇ Importar deudores</button>
+        </div>
+      </div>
+      <div class="filter-tabs">
+        <button class="filter-tab active" onclick="filtrarVentas('todas', this)">Todas</button>
+        <button class="filter-tab" onclick="filtrarVentas('pendiente', this)">Pendientes</button>
+        <button class="filter-tab" onclick="filtrarVentas('cobrado', this)">Cobradas</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Descripción</th>
+              <th>Monto</th>
+              <th>F. Emisión</th>
+              <th>F. Cobro Esp.</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-ventas">
+            <tr><td colspan="7" class="loading">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════ TAB: COMPRAS ══════════════════ -->
+  <div id="tab-compras" class="tab-content">
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Nueva Factura de Compra</span>
+      </div>
+      <form onsubmit="guardarCompra(event)">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Proveedor *</label>
+            <input type="text" id="c-proveedor" required placeholder="Nombre del proveedor" />
+          </div>
+          <div class="form-group">
+            <label>Descripción / N° factura</label>
+            <input type="text" id="c-descripcion" placeholder="FB 0001-00000456" />
+          </div>
+          <div class="form-group">
+            <label>Monto *</label>
+            <input type="number" id="c-monto" required step="0.01" min="0" placeholder="0.00" />
+          </div>
+          <div class="form-group">
+            <label>Fecha de emisión *</label>
+            <input type="date" id="c-fecha-emision" required />
+          </div>
+          <div class="form-group">
+            <label>Fecha de pago esperada *</label>
+            <input type="date" id="c-fecha-pago" required />
+          </div>
+          <div class="form-group">
+            <label>Medio de pago</label>
+            <select id="c-medio-pago">
+              <option value="transferencia">Transferencia</option>
+              <option value="efectivo">Efectivo</option>
+              <option value="tarjeta">Tarjeta de crédito</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Agregar factura</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Facturas de Compra</span>
+        <span id="resumen-compras" style="font-size:0.82rem; color:var(--muted)"></span>
+      </div>
+      <div class="filter-tabs">
+        <button class="filter-tab active" onclick="filtrarCompras('todas', this)">Todas</button>
+        <button class="filter-tab" onclick="filtrarCompras('pendiente', this)">Pendientes</button>
+        <button class="filter-tab" onclick="filtrarCompras('pagado', this)">Pagadas</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Proveedor</th>
+              <th>Descripción</th>
+              <th>Monto</th>
+              <th>F. Emisión</th>
+              <th>F. Pago Esp.</th>
+              <th>Medio</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-compras">
+            <tr><td colspan="8" class="loading">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════ TAB: GASTOS FIJOS ══════════════════ -->
+  <div id="tab-gastos" class="tab-content">
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Nuevo Gasto Fijo</span>
+      </div>
+      <form onsubmit="guardarGastoFijo(event)">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Descripción *</label>
+            <input type="text" id="g-descripcion" required placeholder="Ej: Alquiler, Sueldo X..." />
+          </div>
+          <div class="form-group">
+            <label>Monto estimado *</label>
+            <input type="number" id="g-monto" required step="0.01" min="0" placeholder="0.00" />
+          </div>
+          <div class="form-group">
+            <label>Día del mes</label>
+            <input type="number" id="g-dia" min="1" max="31" value="1" />
+          </div>
+          <div class="form-group">
+            <label>Medio de pago</label>
+            <select id="g-medio-pago">
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="tarjeta">Tarjeta de crédito</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Agregar gasto fijo</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Gastos Fijos Configurados</span>
+        <span id="total-gastos-fijos" style="font-size:0.82rem; color:var(--muted)"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Descripción</th>
+              <th>Monto estimado / mes</th>
+              <th>Día del mes</th>
+              <th>Medio de pago</th>
+              <th>Activo</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-gastos">
+            <tr><td colspan="6" class="loading">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<script>
+// ── Supabase init ────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://izapqbcptdoazfpixvoe.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Ep17liN-Q-NwNk6ffqKy8g_dWUC1wEE';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── State ────────────────────────────────────────────────────────────────────
+let allVentas      = [];
+let allCompras     = [];
+let allGastosFijos = [];
+let saldoInicial   = 0;
+let chartProyeccion = null;
+let filtroVentas   = 'todas';
+let filtroCompras  = 'todas';
+
+// ── Utils ────────────────────────────────────────────────────────────────────
+const fmt = n =>
+  new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+
+const fmtDate = s =>
+  s ? new Date(s + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function mesLabel(offset) {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + offset);
+  return d.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
+}
+
+function mesRange(offset) {
+  const d    = new Date();
+  const year  = d.getFullYear();
+  const month = d.getMonth() + offset;
+  const start = new Date(year, month, 1);
+  const end   = new Date(year, month + 1, 0);
+  return {
+    start: start.toISOString().slice(0, 10),
+    end:   end.toISOString().slice(0, 10),
+  };
+}
+
+const MEDIO_LABEL = { efectivo: 'Efectivo', transferencia: 'Transf.', tarjeta: 'Tarjeta' };
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Load all ─────────────────────────────────────────────────────────────────
+async function loadAll() {
+  await Promise.all([loadConfig(), loadVentas(), loadCompras(), loadGastosFijos()]);
+  renderDashboard();
+}
+
+// ── Config / saldo inicial ───────────────────────────────────────────────────
+async function loadConfig() {
+  const { data } = await sb.from('config').select('*').eq('id', 1).maybeSingle();
+  if (data) {
+    saldoInicial = parseFloat(data.saldo_inicial) || 0;
+    document.getElementById('input-saldo-inicial').value = saldoInicial;
+  }
+}
+
+async function guardarSaldoInicial() {
+  const val = parseFloat(document.getElementById('input-saldo-inicial').value) || 0;
+  const { error } = await sb.from('config').upsert({ id: 1, saldo_inicial: val });
+  if (error) return alert('Error: ' + error.message);
+  saldoInicial = val;
+  renderDashboard();
+}
+
+// ── Ventas ───────────────────────────────────────────────────────────────────
+async function loadVentas() {
+  const { data } = await sb.from('ventas').select('*').order('fecha_emision', { ascending: false });
+  allVentas = data || [];
+  renderTablaVentas();
+}
+
+async function guardarVenta(e) {
+  e.preventDefault();
+  const { error } = await sb.from('ventas').insert([{
+    cliente:               document.getElementById('v-cliente').value.trim(),
+    descripcion:           document.getElementById('v-descripcion').value.trim(),
+    monto:                 parseFloat(document.getElementById('v-monto').value),
+    fecha_emision:         document.getElementById('v-fecha-emision').value,
+    fecha_cobro_esperada:  document.getElementById('v-fecha-cobro').value,
+    estado:                'pendiente',
+  }]);
+  if (error) return alert('Error al guardar: ' + error.message);
+  e.target.reset();
+  document.getElementById('v-fecha-emision').value = today();
+  await loadVentas();
+  renderDashboard();
+}
+
+async function marcarCobrada(id) {
+  const fecha = prompt('Fecha de cobro real (AAAA-MM-DD):', today());
+  if (!fecha) return;
+  await sb.from('ventas').update({ estado: 'cobrado', fecha_cobro_real: fecha }).eq('id', id);
+  await loadVentas();
+  renderDashboard();
+}
+
+async function eliminarVenta(id) {
+  if (!confirm('¿Eliminar esta venta?')) return;
+  await sb.from('ventas').delete().eq('id', id);
+  await loadVentas();
+  renderDashboard();
+}
+
+function filtrarVentas(filtro, btn) {
+  filtroVentas = filtro;
+  document.querySelectorAll('#tab-ventas .filter-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTablaVentas();
+}
+
+function renderTablaVentas() {
+  const tbody = document.getElementById('tbody-ventas');
+  let data = allVentas;
+  if (filtroVentas !== 'todas') data = data.filter(v => v.estado === filtroVentas);
+
+  const pendiente = allVentas.filter(v => v.estado === 'pendiente');
+  const totalPend = pendiente.reduce((s, v) => s + parseFloat(v.monto), 0);
+  document.getElementById('resumen-ventas').textContent =
+    `${pendiente.length} pendientes · $${fmt(totalPend)} a cobrar`;
+
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">Sin registros</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = data.map(v => `
+    <tr>
+      <td><strong>${v.cliente}</strong></td>
+      <td style="color:var(--muted)">${v.descripcion || '—'}</td>
+      <td><strong>$${fmt(v.monto)}</strong></td>
+      <td>${fmtDate(v.fecha_emision)}</td>
+      <td>${fmtDate(v.fecha_cobro_esperada)}</td>
+      <td>
+        <span class="badge ${v.estado === 'cobrado' ? 'badge-green' : 'badge-yellow'}">
+          ${v.estado === 'cobrado' ? 'Cobrado' : 'Pendiente'}
+        </span>
+      </td>
+      <td>
+        <div class="td-actions">
+          ${v.estado === 'pendiente'
+            ? `<button class="btn btn-success btn-sm" onclick="marcarCobrada('${v.id}')">✓ Cobrar</button>`
+            : `<span style="font-size:0.75rem;color:var(--muted)">${fmtDate(v.fecha_cobro_real)}</span>`
+          }
+          <button class="btn btn-danger btn-sm" onclick="eliminarVenta('${v.id}')">✕</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ── Compras ──────────────────────────────────────────────────────────────────
+async function loadCompras() {
+  const { data } = await sb.from('compras').select('*').order('fecha_emision', { ascending: false });
+  allCompras = data || [];
+  renderTablaCompras();
+}
+
+async function guardarCompra(e) {
+  e.preventDefault();
+  const { error } = await sb.from('compras').insert([{
+    proveedor:           document.getElementById('c-proveedor').value.trim(),
+    descripcion:         document.getElementById('c-descripcion').value.trim(),
+    monto:               parseFloat(document.getElementById('c-monto').value),
+    fecha_emision:       document.getElementById('c-fecha-emision').value,
+    fecha_pago_esperada: document.getElementById('c-fecha-pago').value,
+    medio_pago:          document.getElementById('c-medio-pago').value,
+    estado:              'pendiente',
+  }]);
+  if (error) return alert('Error al guardar: ' + error.message);
+  e.target.reset();
+  document.getElementById('c-fecha-emision').value = today();
+  await loadCompras();
+  renderDashboard();
+}
+
+async function marcarPagada(id) {
+  const fecha = prompt('Fecha de pago real (AAAA-MM-DD):', today());
+  if (!fecha) return;
+  await sb.from('compras').update({ estado: 'pagado', fecha_pago_real: fecha }).eq('id', id);
+  await loadCompras();
+  renderDashboard();
+}
+
+async function eliminarCompra(id) {
+  if (!confirm('¿Eliminar esta compra?')) return;
+  await sb.from('compras').delete().eq('id', id);
+  await loadCompras();
+  renderDashboard();
+}
+
+function filtrarCompras(filtro, btn) {
+  filtroCompras = filtro;
+  document.querySelectorAll('#tab-compras .filter-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTablaCompras();
+}
+
+function renderTablaCompras() {
+  const tbody = document.getElementById('tbody-compras');
+  let data = allCompras;
+  if (filtroCompras !== 'todas') data = data.filter(c => c.estado === filtroCompras);
+
+  const pendiente = allCompras.filter(c => c.estado === 'pendiente');
+  const totalPend = pendiente.reduce((s, c) => s + parseFloat(c.monto), 0);
+  document.getElementById('resumen-compras').textContent =
+    `${pendiente.length} pendientes · $${fmt(totalPend)} a pagar`;
+
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty">Sin registros</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = data.map(c => `
+    <tr>
+      <td><strong>${c.proveedor}</strong></td>
+      <td style="color:var(--muted)">${c.descripcion || '—'}</td>
+      <td><strong>$${fmt(c.monto)}</strong></td>
+      <td>${fmtDate(c.fecha_emision)}</td>
+      <td>${fmtDate(c.fecha_pago_esperada)}</td>
+      <td><span class="badge badge-gray">${MEDIO_LABEL[c.medio_pago] || c.medio_pago}</span></td>
+      <td>
+        <span class="badge ${c.estado === 'pagado' ? 'badge-green' : 'badge-red'}">
+          ${c.estado === 'pagado' ? 'Pagado' : 'Pendiente'}
+        </span>
+      </td>
+      <td>
+        <div class="td-actions">
+          ${c.estado === 'pendiente'
+            ? `<button class="btn btn-success btn-sm" onclick="marcarPagada('${c.id}')">✓ Pagar</button>`
+            : `<span style="font-size:0.75rem;color:var(--muted)">${fmtDate(c.fecha_pago_real)}</span>`
+          }
+          <button class="btn btn-danger btn-sm" onclick="eliminarCompra('${c.id}')">✕</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ── Gastos Fijos ─────────────────────────────────────────────────────────────
+async function loadGastosFijos() {
+  const { data } = await sb.from('gastos_fijos').select('*').order('descripcion');
+  allGastosFijos = data || [];
+  renderTablaGastosFijos();
+}
+
+async function guardarGastoFijo(e) {
+  e.preventDefault();
+  const { error } = await sb.from('gastos_fijos').insert([{
+    descripcion:    document.getElementById('g-descripcion').value.trim(),
+    monto_estimado: parseFloat(document.getElementById('g-monto').value),
+    dia_del_mes:    parseInt(document.getElementById('g-dia').value) || 1,
+    medio_pago:     document.getElementById('g-medio-pago').value,
+    activo:         true,
+  }]);
+  if (error) return alert('Error al guardar: ' + error.message);
+  e.target.reset();
+  document.getElementById('g-dia').value = 1;
+  await loadGastosFijos();
+  renderDashboard();
+}
+
+async function toggleGastoFijo(id, activo) {
+  await sb.from('gastos_fijos').update({ activo: !activo }).eq('id', id);
+  await loadGastosFijos();
+  renderDashboard();
+}
+
+async function eliminarGastoFijo(id) {
+  if (!confirm('¿Eliminar este gasto fijo?')) return;
+  await sb.from('gastos_fijos').delete().eq('id', id);
+  await loadGastosFijos();
+  renderDashboard();
+}
+
+function renderTablaGastosFijos() {
+  const tbody = document.getElementById('tbody-gastos');
+
+  if (!allGastosFijos.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">Sin gastos fijos configurados</td></tr>`;
+    document.getElementById('total-gastos-fijos').textContent = '';
+    return;
+  }
+
+  const totalActivo = allGastosFijos
+    .filter(g => g.activo)
+    .reduce((s, g) => s + parseFloat(g.monto_estimado), 0);
+  document.getElementById('total-gastos-fijos').textContent =
+    `Total mensual activo: $${fmt(totalActivo)}`;
+
+  tbody.innerHTML = allGastosFijos.map(g => `
+    <tr>
+      <td><strong>${g.descripcion}</strong></td>
+      <td>$${fmt(g.monto_estimado)}</td>
+      <td>Día ${g.dia_del_mes}</td>
+      <td><span class="badge badge-gray">${MEDIO_LABEL[g.medio_pago] || g.medio_pago}</span></td>
+      <td>
+        <label class="toggle">
+          <input type="checkbox" ${g.activo ? 'checked' : ''} onchange="toggleGastoFijo('${g.id}', ${g.activo})" />
+          <span class="toggle-slider"></span>
+        </label>
+      </td>
+      <td>
+        <button class="btn btn-danger btn-sm" onclick="eliminarGastoFijo('${g.id}')">✕</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+function renderDashboard() {
+  // Saldo actual = saldo_inicial + cobrado - pagado
+  const cobrado  = allVentas.filter(v => v.estado === 'cobrado').reduce((s, v) => s + parseFloat(v.monto), 0);
+  const pagado   = allCompras.filter(c => c.estado === 'pagado').reduce((s, c) => s + parseFloat(c.monto), 0);
+  const saldoActual = saldoInicial + cobrado - pagado;
+
+  // Cuentas a cobrar (ventas pendientes)
+  const aCobrar   = allVentas.filter(v => v.estado === 'pendiente').reduce((s, v) => s + parseFloat(v.monto), 0);
+  const nCobrar   = allVentas.filter(v => v.estado === 'pendiente').length;
+
+  // Cuentas a pagar (compras pendientes)
+  const aPagar    = allCompras.filter(c => c.estado === 'pendiente').reduce((s, c) => s + parseFloat(c.monto), 0);
+  const nPagar    = allCompras.filter(c => c.estado === 'pendiente').length;
+
+  // Deuda tarjeta (compras pendientes pagadas con tarjeta)
+  const tarjeta   = allCompras.filter(c => c.estado === 'pendiente' && c.medio_pago === 'tarjeta')
+                               .reduce((s, c) => s + parseFloat(c.monto), 0);
+
+  document.getElementById('kpi-grid').innerHTML = `
+    <div class="kpi-card ${saldoActual >= 0 ? 'green' : 'red'}">
+      <div class="label">Saldo en Caja</div>
+      <div class="value">$${fmt(saldoActual)}</div>
+      <div class="sub">Saldo inicial + cobros – pagos realizados</div>
+    </div>
+    <div class="kpi-card blue">
+      <div class="label">Cuentas a Cobrar</div>
+      <div class="value">$${fmt(aCobrar)}</div>
+      <div class="sub">${nCobrar} factura${nCobrar !== 1 ? 's' : ''} pendiente${nCobrar !== 1 ? 's' : ''}</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="label">Cuentas a Pagar</div>
+      <div class="value">$${fmt(aPagar)}</div>
+      <div class="sub">${nPagar} factura${nPagar !== 1 ? 's' : ''} pendiente${nPagar !== 1 ? 's' : ''}</div>
+    </div>
+    ${tarjeta > 0 ? `
+    <div class="kpi-card yellow">
+      <div class="label">Deuda Tarjeta</div>
+      <div class="value">$${fmt(tarjeta)}</div>
+      <div class="sub">Compras pendientes por tarjeta</div>
+    </div>` : ''}
+  `;
+
+  renderProyeccion(saldoActual);
+}
+
+// ── Proyección 3 meses ────────────────────────────────────────────────────────
+function renderProyeccion(saldoBase) {
+  const proyeccion = [];
+  let saldoAcum = saldoBase;
+
+  for (let i = 1; i <= 3; i++) {
+    const { start, end } = mesRange(i);
+
+    // Ingresos: ventas pendientes cuya fecha de cobro cae en este mes
+    const ingresos = allVentas
+      .filter(v => v.estado === 'pendiente' && v.fecha_cobro_esperada >= start && v.fecha_cobro_esperada <= end)
+      .reduce((s, v) => s + parseFloat(v.monto), 0);
+
+    // Egresos compras: pendientes cuya fecha de pago cae en este mes
+    const egresoCompras = allCompras
+      .filter(c => c.estado === 'pendiente' && c.fecha_pago_esperada >= start && c.fecha_pago_esperada <= end)
+      .reduce((s, c) => s + parseFloat(c.monto), 0);
+
+    // Egresos gastos fijos activos (proyectados para cada mes)
+    const egresoGastos = allGastosFijos
+      .filter(g => g.activo)
+      .reduce((s, g) => s + parseFloat(g.monto_estimado), 0);
+
+    const egresos = egresoCompras + egresoGastos;
+    const flujo   = ingresos - egresos;
+    saldoAcum    += flujo;
+
+    proyeccion.push({ label: mesLabel(i), ingresos, egresos, flujo, saldo: saldoAcum });
+  }
+
+  // Tabla
+  document.getElementById('tbody-proyeccion').innerHTML = proyeccion.map(p => `
+    <tr>
+      <td><strong>${p.label}</strong></td>
+      <td style="color:var(--green-text)">+$${fmt(p.ingresos)}</td>
+      <td style="color:var(--red-text)">-$${fmt(p.egresos)}</td>
+      <td class="${p.flujo >= 0 ? 'positive' : 'negative'}">${p.flujo >= 0 ? '+' : ''}$${fmt(p.flujo)}</td>
+      <td><strong class="${p.saldo >= 0 ? 'positive' : 'negative'}">$${fmt(p.saldo)}</strong></td>
+    </tr>
+  `).join('');
+
+  renderChart(proyeccion);
+}
+
+// ── Chart ─────────────────────────────────────────────────────────────────────
+function renderChart(proyeccion) {
+  const ctx = document.getElementById('chart-proyeccion').getContext('2d');
+  if (chartProyeccion) chartProyeccion.destroy();
+
+  chartProyeccion = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: proyeccion.map(p => p.label),
+      datasets: [
+        {
+          label: 'Ingresos esperados',
+          data: proyeccion.map(p => p.ingresos),
+          backgroundColor: '#bbf7d0',
+          borderColor: '#22c55e',
+          borderWidth: 2,
+          borderRadius: 6,
+        },
+        {
+          label: 'Egresos esperados',
+          data: proyeccion.map(p => p.egresos),
+          backgroundColor: '#fecaca',
+          borderColor: '#ef4444',
+          borderWidth: 2,
+          borderRadius: 6,
+        },
+        {
+          label: 'Saldo proyectado',
+          data: proyeccion.map(p => p.saldo),
+          type: 'line',
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59,130,246,0.08)',
+          borderWidth: 2,
+          pointBackgroundColor: '#3b82f6',
+          pointRadius: 5,
+          tension: 0.3,
+          fill: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: $${fmt(ctx.parsed.y)}`,
+          },
+        },
+      },
+      scales: {
+        y: {
+          ticks: { callback: v => '$' + fmt(v) },
+          grid: { color: '#f1f5f9' },
+        },
+      },
+    },
+  });
+}
+
+// ── Importar deudores desde PDF (10/02/2026) ──────────────────────────────────
+const DEUDORES_PDF = [
+  { cliente: 'COMPAÑIA DE TRANSPORTE DE ENERGIA ELECTR', descripcion: 'FCC A 0004-00000299', monto: 25555200.00, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-02-16' },
+  { cliente: 'TRANSBA SA',                               descripcion: 'FCC A 0004-00000300', monto: 17036800.00, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-02-16' },
+  { cliente: 'SACDE SA',                                 descripcion: 'FCC A 0004-00000295', monto:  4752880.00, fecha_emision: '2026-01-09', fecha_cobro_esperada: '2026-02-08' },
+  { cliente: 'SACDE SA',                                 descripcion: 'FCC A 0004-00000298', monto:  8211060.00, fecha_emision: '2026-01-15', fecha_cobro_esperada: '2026-02-14' },
+  { cliente: 'SACDE SA',                                 descripcion: 'FCC A 0004-00000301', monto: 12127104.00, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
+  { cliente: 'SACDE SA',                                 descripcion: 'FCC A 0004-00000302', monto:  4235000.00, fecha_emision: '2026-02-04', fecha_cobro_esperada: '2026-02-19' },
+  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000397',  monto:  7354864.00, fecha_emision: '2026-01-01', fecha_cobro_esperada: '2026-01-31' },
+  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000405',  monto:  7354864.00, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
+  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000406',  monto:  5925612.00, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
+  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000407',  monto:  5925612.00, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
+  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000408',  monto:  7722607.20, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
+  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000409',  monto:  1534473.60, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
+  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000410',  monto:  7722607.20, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
+  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000411',  monto:   224820.42, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
+  { cliente: 'CAPGEMINI ARGENTINA S.A.',                 descripcion: 'FC A 0004-00000412',  monto:   179496.24, fecha_emision: '2026-02-01', fecha_cobro_esperada: '2026-03-03' },
+];
+
+async function importarDeudores() {
+  // Determinar cuáles ya están cargadas por número de comprobante
+  const existentes = new Set(allVentas.map(v => v.descripcion));
+  const nuevas = DEUDORES_PDF.filter(f => !existentes.has(f.descripcion));
+
+  if (!nuevas.length) {
+    alert('Todas las facturas del reporte ya están cargadas.');
+    return;
+  }
+
+  const resumen = nuevas.map(f => `• ${f.descripcion} — ${f.cliente} — $${fmt(f.monto)}`).join('\n');
+  if (!confirm(`Se importarán ${nuevas.length} factura(s):\n\n${resumen}\n\n¿Continuar?`)) return;
+
+  const rows = nuevas.map(f => ({ ...f, estado: 'pendiente' }));
+  const { error } = await sb.from('ventas').insert(rows);
+  if (error) return alert('Error al importar: ' + error.message);
+
+  await loadVentas();
+  renderDashboard();
+  alert(`✓ ${nuevas.length} factura(s) importadas correctamente.`);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById('v-fecha-emision').value = today();
+document.getElementById('c-fecha-emision').value = today();
+loadAll();
+</script>
+
+</body>
+</html>
